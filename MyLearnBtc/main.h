@@ -394,7 +394,52 @@ public:
             nDebit += txin.GetDebit();
         return nDebit;
     }
-    int
+    int64 GetCredit() const
+    {
+        int64 nCredit =0;
+        foreach(const CTxOut& txout, vout)
+            nCredit += txout.GetCredit();
+        return nCredit;
+    }
+    int64 GetValueOut() const
+    {
+        int64 nValueOut = 0;
+        foreach(const CTxOut& txout, vout)
+        {
+            if (txout.nValue<0)
+                throw runtime_error("CTransaction::GetValueOut() : negative value");
+            nValue += txout.nValue;
+        }
+        return nValueOut;
+    }
+    //
+    int64 GetMinFee(bool fDiscout=false) const
+    {
+        unsigned int nBytes=::GetSerializeSize(*this,SER_NETWORK);
+        if (fDiscount && nBytes<10000)
+            return 0 ;
+        return (1+(int64)nBytes/1000)*CENT;
+    }
+    
+    bool ReadFromDisk(CDiskTxPos pos, FILE** pfileRet=NULL)
+    {
+        CAutoFile filein=OpenBlockFile(pos.nFile,0,pfileRet?"rb+":"rb");
+        if (!filein)
+        {
+            return error("CTransaction::ReadFromDisk() : OpenBlockFile failed");
+        }
+        if (fseek(filein,pos.nTxPos,SEEK_SET)!=0)
+            return error("CTransaction::ReadFromDisk() : fseek failed");
+        filein >> *this;
+        
+        if (pfileRet)
+        {
+            if (fseek(filein,pos.nTxPos,SEEK_SET)!=0)
+                return error("CTransaction::ReadFromDisk() : second fseek failed");
+            *pfileRet=filein.release();
+        }
+        return true;
+    }
 }
 
 
