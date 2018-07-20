@@ -531,6 +531,46 @@ public:
 
 };
 
+class CWalletTx:public CMerkleTx
+{
+public:
+    vector<CMerkleTx> vtxPrev;
+    map<string, string> mapValue;
+    vector<pair<string,string> > vOrderForm;
+    unsigned int fTimeReceivedIsTxTime;
+    unsigned int nTimeReceived;
+
+    char fFromMe;
+    char fSpent;
+
+    mutable unsigned int nTimeDisplayed;
+
+    CWalletTx(){Init();}
+    CWalletTX(const CMerkleTx& txIn):CMerkleTx(txIn)
+    {
+        Init();
+
+    }
+    CWalletTX(const CTransaction& txIn):CMerkleTx(txIn)
+    {
+        Init();
+
+    }
+    void Init()
+    {
+        fTimeReceivedIsTxTime = false;
+        nTimeReceived = 0 ;
+        fFromMe = false;
+        fSpent = false;
+        nTimeDisplayed = 0;
+    }
+
+    IMPLEMENT_SERIALIZE
+    (
+        nSerSize += SerReadWrite(s, *(CMerkleTx*)this,nType,nVersion)
+    )
+
+};
 
 
 
