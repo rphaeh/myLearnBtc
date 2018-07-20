@@ -81,33 +81,33 @@ public:
     unsigned int nFile;
     unsigned int nBlockPos;
     unsigned int nTxPos;
-    
+
     CDiskTxPos()
     {
         SetNull();
     }
-    
+
     CDiskTxPos(unsigned int nFileIn, unsigned int nBlockPosIn, unsigned int nTxPosIn)
     {
         nFile = nFileIn;
         nBlockPos = nBlockPosIn;
         nTxPos = nTxPosIn;
     }
-    
+
     IMPLEMENT_SERIALIZE(READWRITE(FLATDATA(*this));)
     void SetNull() {nFile = -1; nBlockPos = 0; nTxPos = 0;}
     bool IsNull() const {return(nFile==-1);}
-    
+
     friend bool operator==(const CDiskTxPos& a, const CDiskTxPos& b)
     {
         return(a.nFile == b.nFile && a.nBlockPos == b.nBlockPos && a.nTxPos == b.nTxPos);
     }
-    
+
     friend bool operator!=(const CDiskTxPos& a, const CDiskTxPos& b)
     {
         return!(a==b);
     }
-    
+
     string ToString() const
     {
         if(IsNull())
@@ -117,7 +117,7 @@ public:
         else
             return strprintf("(nFile=%d, nBlockPos=%d, nTxPos=%d)",nFile,nBlockPos,nTxPos);
     }
-    
+
     void print() const
     {
         printf("%s",ToString().c_str());
@@ -129,7 +129,7 @@ class CInPoint
 public:
     CTransaction* ptx;
     unsigned int n;
-    
+
     CInPoint() {SetNull();}
     CInPoint(CTransaction* ptxIn, unsigned int nIn) {ptx = ptxIn; n = nIn;}
     void SetNull() {ptx = NULL; n=-1;}
@@ -141,13 +141,13 @@ class COutPoint
 public:
     uint256 hash;
     unsigned int n;
-    
+
     COutPoint() {SetNull();}
     COutPoint(uint256 hashIn, unsigned int nIn) {hash=hashIn; n=nIn;}
     IMPLEMENT_SERIALIZE(READWRITE(FLATDATA(*this));)
     void SetNull() {hash=0;n=-1;}
     bool IsNull() const {return (hash ==0 && n==-1);}
-    
+
     friend bool operator<(const COutPoint& a, const COutPoint& b)
     {
         return(a.hash < b.hash || (a.hash == b.hash&&a.n < b.n));
@@ -156,7 +156,7 @@ public:
     {
         return(a.hash == b.hash && a.n == b.n);
     }
-    
+
     friend bool operator!=(const COutPoint& a, const COutPoint& b)
     {
         return!(a==b);
@@ -165,7 +165,7 @@ public:
     {
         return strprintf("COutPoint(%s,%d)",hash.ToString().substr(0,6).c_str(),n);
     }
-    
+
     void print() const
     {
         printf("%s",ToString().c_str());
@@ -174,24 +174,24 @@ public:
 
 class CTxIn
 {
-    
+
 public:
     COutPoint prevout;
     CScript scriptSig;
     unsigned int nSequence;
-    
+
     CTxIn()
     {
         nSequence = UINT_MAX:
     }
-    
+
     explicit CTxIn(COutPoint prevoutIn, CScript scriptSignIn=CScript(),unsigned int nSequence=UINT_MAX)
     {
         prevout = prevoutIn;
         scriptSig = scriptSignIn;
         nSequence = nSequenceIn;
     }
-    
+
     CTxIn(uint256 hashPrevTx, unsigned int nOut, CScript scriptSignIn=CScript(),unsigned int nSequence=UINT_MAX)
     {
         prevout = COutPoint(hashPrevTx,nOut);
@@ -204,7 +204,7 @@ public:
      READWRITE(scriptSig);
      READWRITE(nSequence);
      )
-    
+
     bool isFinal() const
     {
         return (nSequence == UINT_MAX);
@@ -213,7 +213,7 @@ public:
     {
         return(a.prevout == b.prevout && a.scriptSig == b.scriptSig && a.nSequence == b.nSequence);
     }
-    
+
     friend bool operator!=(const COutPoint& a, const COutPoint& b)
     {
         return!(a==b);
@@ -274,7 +274,7 @@ public:
     {
         return(a.nValue == b.nValue && a.scriptPubKey == b.scriptPubKey);
     }
-    
+
     friend bool operator!=(const COutPoint& a, const COutPoint& b)
     {
         return!(a==b);
@@ -286,7 +286,7 @@ public:
         return strprintf("CTxOut(nValue=%I64d.%8I64d,scriptPubKey=%s",nValue/COIN,nValue%COIN,scriptPubKey.ToString().substr(0,24).c_str());
     }
     void print() const {printf("%s\n",ToString().c_str());}
-    
+
 };
 
 class CTransaction
@@ -296,7 +296,7 @@ public:
     vector<CTxIn> vin;
     vector<CTxOut> vout;
     int nLockTime;
-    
+
     CTransaction() {SetNull();}
     IMPLEMENT_SERIALIZE
     (
@@ -306,7 +306,7 @@ public:
      READWRITE(vout);
      READWRITE(nLockTime);
      )
-    
+
     void SetNull()
     {
         nVersion=0;
@@ -357,7 +357,7 @@ public:
         return fNewer;
     }
     bool IsCoinBase() const {return (vin.size() ==1 && vin[0].prevout.IsNull());}
-    
+
     bool CheckTransaction() const
     {
         if (vin.empty()||vout.empty())
@@ -370,14 +370,14 @@ public:
             if(vin[0].scriptSig.size()<2||vin[0].scriptSig.size()>100)
                 return error("CTransaction::CheckTransaction() : coinbase script size");
         }
-        
+
         else
         {
             foreach(const CTxIn& txin, vin)
             if (txin.prevout.IsNull())
                 return error("CTransaction::CheckTransaction() : prevout is null");
         }
-        
+
         return true;
     }
     bool IsMine() const
@@ -420,7 +420,7 @@ public:
             return 0 ;
         return (1+(int64)nBytes/1000)*CENT;
     }
-    
+
     bool ReadFromDisk(CDiskTxPos pos, FILE** pfileRet=NULL)
     {
         CAutoFile filein=OpenBlockFile(pos.nFile,0,pfileRet?"rb+":"rb");
@@ -431,7 +431,7 @@ public:
         if (fseek(filein,pos.nTxPos,SEEK_SET)!=0)
             return error("CTransaction::ReadFromDisk() : fseek failed");
         filein >> *this;
-        
+
         if (pfileRet)
         {
             if (fseek(filein,pos.nTxPos,SEEK_SET)!=0)
@@ -440,7 +440,96 @@ public:
         }
         return true;
     }
-}
+    friend bool operator==(const CTransaction&a,const CTransaction& b)
+    {
+        return(a.nVersion == b.nVersion&& a.vin==b.vin&& a.vout==b.vout&&a.nLockTime==b.nLockTime);
+    }
+    friend bool operator!=(const CTransaction&a, const CTransaction& b)
+    {
+        return !(a==b);
+    }
+    string ToString()const
+    {
+        string str;
+        str += strprintf("CTransaction(hash=%s,ver=%d,vin=%d,vin.size=%d,vout.size=%d,nLockTime=%d)n",GetHash(),ToString(),substr(0,6).c_str(),nVersion,vin.size(),vout.size(),nLockTime);
+        for (int i = 0; i < vin.size();i++)
+        {
+            str+="   "+vin[i].ToString()+"\n";
+        }
+        for (int i = 0; i <vout.size();i++)
+        {
+             str+="   "+vout[i].ToString()+"\n";
+        }
+        return str;
+
+    }
+    void print() const
+    {
+        printf("(%s)\n",ToString().c_str());
+    }
+
+    bool DisConnectInputs(CTxDB& txdb);
+    bool ConnectInputs(CTxDB& txdb,std::map<uint256, CTxIndex> &mapTestPool,CDiskTxPos posThisTx, int nHeight, int64& nFees, bool fBlock, bool fMiner, int64 nMinFee=0);
+    bool ClinetConnectInputs();
+    bool AcceptTransaction(CTxDB &txdb,bool fCheckInputs=true, bool* pfMissingInputs=NULL);
+    bool AcceptTransaction(bool fCheckInputs=true,bool *pfMissingInputs=NULL)
+    {
+        CTxDB txdb("r");
+        return AcceptTransaction(txdb,fCheckInputs,pfMissingInputs);
+    }
+
+protected:
+    bool AddToMemoryPool();
+public:
+    bool RemoveFromMemoryPool();
+};
+
+
+class CMerkleTx:public CTransaction
+{
+public:
+    uint256 hashBlock;
+    vector<uint256> vMerkleBranch;
+    int nIndex;
+
+    mutable bool fMerkleVerified;
+
+    CMerkleTx() {Init();}
+    CMerkleTx(const CTransaction& txIn):CTransaction(txIn)
+    {
+        Init();
+    }
+
+    void Init()
+    {
+        hashBlock=0;
+        nIndex=-1;
+        fMerkleVerified=false;
+    }
+
+    int64 GetCredit() const
+    {
+        if (IsCoinBase()&&GetBlocksToMaturity()>0)
+            return 0;
+       return CTransaction::GetCredit();
+    }
+
+    IMPLEMENT_SERIALIZE
+    {
+        nSerSize+=SerReadWrite(s,*(CTransaction*)this,nType,nVersion,ser_action);
+        nVersion=this->nVersion;
+        READWRITE(hashBlock) ;
+        READWRITE(vMerkleBranch);
+        READWRITE(nIndex);
+    }
+    int SetMerkleBranch(const CBlock* pblock=NULL);
+    int GetDepthInMainChain() const;
+    bool IsInMainChain() const{return GetDepthInMainChain()>0;}
+    int GetBlocksToMaturity() const;
+    bool AcceptTransaction(CTxDB& txdb,bool fCheckInputs=true);
+    bool AcceptTransaction() {CTxDB txdb("r"); return AcceptTransaction(txdb);}
+
+};
 
 
 
