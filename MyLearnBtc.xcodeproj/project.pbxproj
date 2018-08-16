@@ -7,6 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		45E7F72F21250C2300B52C8D /* db.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 45E7F72B21250C2300B52C8D /* db.cpp */; };
+		45E7F73021250C2300B52C8D /* irc.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 45E7F72C21250C2300B52C8D /* irc.cpp */; };
+		45E7F74121250C4700B52C8D /* ui.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 45E7F73321250C4700B52C8D /* ui.cpp */; };
+		45E7F74221250C4700B52C8D /* util.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 45E7F73421250C4700B52C8D /* util.cpp */; };
+		45E7F74321250C4700B52C8D /* market.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 45E7F73521250C4700B52C8D /* market.cpp */; };
+		45E7F74421250C4700B52C8D /* uibase.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 45E7F73621250C4700B52C8D /* uibase.cpp */; };
+		45E7F74521250C4700B52C8D /* script.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 45E7F73A21250C4700B52C8D /* script.cpp */; };
+		45E7F74621250C4700B52C8D /* sha.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 45E7F73E21250C4700B52C8D /* sha.cpp */; };
+		45E7F74721250C4700B52C8D /* net.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 45E7F74021250C4700B52C8D /* net.cpp */; };
 		A281B67721006ED900CDBA33 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A281B67621006ED900CDBA33 /* main.cpp */; };
 /* End PBXBuildFile section */
 
@@ -23,6 +32,30 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		45E7F72421250C2200B52C8D /* irc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = irc.h; sourceTree = "<group>"; };
+		45E7F72521250C2300B52C8D /* db.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = db.h; sourceTree = "<group>"; };
+		45E7F72621250C2300B52C8D /* bignum.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = bignum.h; sourceTree = "<group>"; };
+		45E7F72721250C2300B52C8D /* key.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = key.h; sourceTree = "<group>"; };
+		45E7F72821250C2300B52C8D /* base58.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = base58.h; sourceTree = "<group>"; };
+		45E7F72B21250C2300B52C8D /* db.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = db.cpp; sourceTree = "<group>"; };
+		45E7F72C21250C2300B52C8D /* irc.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = irc.cpp; sourceTree = "<group>"; };
+		45E7F72D21250C2300B52C8D /* headers.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = headers.h; sourceTree = "<group>"; };
+		45E7F73121250C4700B52C8D /* market.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = market.h; sourceTree = "<group>"; };
+		45E7F73221250C4700B52C8D /* serialize.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serialize.h; sourceTree = "<group>"; };
+		45E7F73321250C4700B52C8D /* ui.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ui.cpp; sourceTree = "<group>"; };
+		45E7F73421250C4700B52C8D /* util.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = util.cpp; sourceTree = "<group>"; };
+		45E7F73521250C4700B52C8D /* market.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = market.cpp; sourceTree = "<group>"; };
+		45E7F73621250C4700B52C8D /* uibase.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = uibase.cpp; sourceTree = "<group>"; };
+		45E7F73721250C4700B52C8D /* script.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = script.h; sourceTree = "<group>"; };
+		45E7F73821250C4700B52C8D /* uint256.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = uint256.h; sourceTree = "<group>"; };
+		45E7F73921250C4700B52C8D /* sha.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = sha.h; sourceTree = "<group>"; };
+		45E7F73A21250C4700B52C8D /* script.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = script.cpp; sourceTree = "<group>"; };
+		45E7F73B21250C4700B52C8D /* ui.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ui.h; sourceTree = "<group>"; };
+		45E7F73C21250C4700B52C8D /* util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = util.h; sourceTree = "<group>"; };
+		45E7F73D21250C4700B52C8D /* uibase.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = uibase.h; sourceTree = "<group>"; };
+		45E7F73E21250C4700B52C8D /* sha.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = sha.cpp; sourceTree = "<group>"; };
+		45E7F73F21250C4700B52C8D /* net.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = net.h; sourceTree = "<group>"; };
+		45E7F74021250C4700B52C8D /* net.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = net.cpp; sourceTree = "<group>"; };
 		A281B67321006ED900CDBA33 /* MyLearnBtc */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = MyLearnBtc; sourceTree = BUILT_PRODUCTS_DIR; };
 		A281B67621006ED900CDBA33 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 		A281B67D2100707200CDBA33 /* main.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = main.h; sourceTree = "<group>"; };
@@ -58,6 +91,30 @@
 		A281B67521006ED900CDBA33 /* MyLearnBtc */ = {
 			isa = PBXGroup;
 			children = (
+				45E7F72821250C2300B52C8D /* base58.h */,
+				45E7F72621250C2300B52C8D /* bignum.h */,
+				45E7F72B21250C2300B52C8D /* db.cpp */,
+				45E7F73521250C4700B52C8D /* market.cpp */,
+				45E7F73121250C4700B52C8D /* market.h */,
+				45E7F74021250C4700B52C8D /* net.cpp */,
+				45E7F73F21250C4700B52C8D /* net.h */,
+				45E7F73A21250C4700B52C8D /* script.cpp */,
+				45E7F73721250C4700B52C8D /* script.h */,
+				45E7F73221250C4700B52C8D /* serialize.h */,
+				45E7F73E21250C4700B52C8D /* sha.cpp */,
+				45E7F73921250C4700B52C8D /* sha.h */,
+				45E7F73321250C4700B52C8D /* ui.cpp */,
+				45E7F73B21250C4700B52C8D /* ui.h */,
+				45E7F73621250C4700B52C8D /* uibase.cpp */,
+				45E7F73D21250C4700B52C8D /* uibase.h */,
+				45E7F73821250C4700B52C8D /* uint256.h */,
+				45E7F73421250C4700B52C8D /* util.cpp */,
+				45E7F73C21250C4700B52C8D /* util.h */,
+				45E7F72521250C2300B52C8D /* db.h */,
+				45E7F72D21250C2300B52C8D /* headers.h */,
+				45E7F72C21250C2300B52C8D /* irc.cpp */,
+				45E7F72421250C2200B52C8D /* irc.h */,
+				45E7F72721250C2300B52C8D /* key.h */,
 				A281B67621006ED900CDBA33 /* main.cpp */,
 				A281B67D2100707200CDBA33 /* main.h */,
 			);
@@ -95,7 +152,7 @@
 				TargetAttributes = {
 					A281B67221006ED900CDBA33 = {
 						CreatedOnToolsVersion = 9.2;
-						ProvisioningStyle = Automatic;
+						ProvisioningStyle = Manual;
 					};
 				};
 			};
@@ -121,6 +178,15 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				45E7F74521250C4700B52C8D /* script.cpp in Sources */,
+				45E7F72F21250C2300B52C8D /* db.cpp in Sources */,
+				45E7F74121250C4700B52C8D /* ui.cpp in Sources */,
+				45E7F73021250C2300B52C8D /* irc.cpp in Sources */,
+				45E7F74321250C4700B52C8D /* market.cpp in Sources */,
+				45E7F74221250C4700B52C8D /* util.cpp in Sources */,
+				45E7F74621250C4700B52C8D /* sha.cpp in Sources */,
+				45E7F74721250C4700B52C8D /* net.cpp in Sources */,
+				45E7F74421250C4700B52C8D /* uibase.cpp in Sources */,
 				A281B67721006ED900CDBA33 /* main.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -234,18 +300,20 @@
 		A281B67B21006ED900CDBA33 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 92S2DMY739;
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 			};
 			name = Debug;
 		};
 		A281B67C21006ED900CDBA33 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 92S2DMY739;
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 			};
 			name = Release;
 		};

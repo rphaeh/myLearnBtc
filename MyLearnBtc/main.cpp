@@ -1,35 +1,40 @@
-//
-//  main.cpp
-//  MyLearnBtc
-//
-//  Created by rphaeh on 2018/7/19.
-//  Copyright © 2018年 rphaeh. All rights reserved.
-//
+// Copyright (c) 2009 Satoshi Nakamoto
+// Distributed under the MIT/X11 software license, see the accompanying
+// file license.txt or http://www.opensource.org/licenses/mit-license.php.
+
 #include "headers.h"
 #include "sha.h"
 
+
+
+
+
+//
+// Global state
+//
+
 CCriticalSection cs_main;
 
-map<uin256, CTransaction> mapTransactions;
+map<uint256, CTransaction> mapTransactions;
 CCriticalSection cs_mapTransactions;
 unsigned int nTransactionsUpdated = 0;
-map<COutPoint,CInPoint> mapNextTx;
+map<COutPoint, CInPoint> mapNextTx;
 
-map<uin256,CBlockIndex*> mapBlockIndex;
-const uin256 hashGenesisBlock("0x000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f");
+map<uint256, CBlockIndex*> mapBlockIndex;
+const uint256 hashGenesisBlock("0x000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f");
 CBlockIndex* pindexGenesisBlock = NULL;
-int nBestHeight =-1;
-uin256 hashBestChain = 0;
-CBlockIndex *pindexBest = NULL;
+int nBestHeight = -1;
+uint256 hashBestChain = 0;
+CBlockIndex* pindexBest = NULL;
 
-map<uin256,CBlock*> mapOrphanBlocks;
-multimap<uin256,CBlock*> mapOrphanBlocksByPrev;
+map<uint256, CBlock*> mapOrphanBlocks;
+multimap<uint256, CBlock*> mapOrphanBlocksByPrev;
 
-map<uin256,CDataStream*> mapOrphanTransactions;
-multimap<uin256,CDataStream*> mapOrphanTransactionsByPrev;
+map<uint256, CDataStream*> mapOrphanTransactions;
+multimap<uint256, CDataStream*> mapOrphanTransactionsByPrev;
 
-map<uin256,CWalletTx> mapWallet;
-vector<pair<uin256,bool> > vWalletUpdated;
+map<uint256, CWalletTx> mapWallet;
+vector<pair<uint256, bool> > vWalletUpdated;
 CCriticalSection cs_mapWallet;
 
 map<vector<unsigned char>, CPrivKey> mapKeys;
@@ -40,128 +45,168 @@ CKey keyUser;
 string strSetDataDir;
 int nDropMessagesTest = 0;
 
+// Settings
 int fGenerateBitcoins;
 int64 nTransactionFee = 0;
 CAddress addrIncoming;
+
+
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// mapKeys
+//
 
 bool AddKey(const CKey& key)
 {
     CRITICAL_BLOCK(cs_mapKeys)
     {
-        mapKeys[key.GetPubKey()]=key.GerPrivKey();
-        mapPubKeys[Hash160(key.GetPubKey())]=key.GetPubKey();
-
+        mapKeys[key.GetPubKey()] = key.GetPrivKey();
+        mapPubKeys[Hash160(key.GetPubKey())] = key.GetPubKey();
     }
-    return CWalletDB().WriteKey(key.GetPubKey(),key.GerPrivKey());
+    return CWalletDB().WriteKey(key.GetPubKey(), key.GetPrivKey());
 }
 
 vector<unsigned char> GenerateNewKey()
 {
     CKey key;
     key.MakeNewKey();
-    if(!AddKey(key))
-        throw runtime_error("GenerateNewKey():AddKey failed\n");
+    if (!AddKey(key))
+        throw runtime_error("GenerateNewKey() : AddKey failed\n");
     return key.GetPubKey();
 }
 
 
+
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// mapWallet
+//
+
 bool AddToWallet(const CWalletTx& wtxIn)
 {
-    uin256 hash = wtxIn.GetHash();
+    uint256 hash = wtxIn.GetHash();
     CRITICAL_BLOCK(cs_mapWallet)
     {
-        pair<map<uin256,CWalletTx>::iterator,bool> ret=mapWallet.insert(make_pair(hash,wtxIn));
-        CWalletTx& wtx=(*ret.first).second;
-        bool fInsertedNew=ret.second;
-        if(fInsertedNew)
-            wtx.nTimeReceived=GetAdjustedTime();
-        printf("AddToWallet %s %s\n",wtxIn.GetHash(),fInsertedNew?"new":"update" );
-        if(!fInsertedNew)
+        // Inserts only if not already there, returns tx inserted or tx found
+        pair<map<uint256, CWalletTx>::iterator, bool> ret = mapWallet.insert(make_pair(hash, wtxIn));
+        CWalletTx& wtx = (*ret.first).second;
+        bool fInsertedNew = ret.second;
+        if (fInsertedNew)
+            wtx.nTimeReceived = GetAdjustedTime();
+
+        //// debug print
+        printf("AddToWallet %s  %s\n", wtxIn.GetHash().ToString().substr(0,6).c_str(), fInsertedNew ? "new" : "update");
+
+        if (!fInsertedNew)
         {
-            bool fUpdted=false;
-            if(wtxIn.hashBlock!=0&&wtxIn.hashBlock!=wtx.hashBlock)
+            // Merge
+            bool fUpdated = false;
+            if (wtxIn.hashBlock != 0 && wtxIn.hashBlock != wtx.hashBlock)
             {
-                wtx.hashBlock=wtxIn.hashBlock;
-                fUpdted=true;
+                wtx.hashBlock = wtxIn.hashBlock;
+                fUpdated = true;
             }
-            if(wtxIn.nIndex!=-1&&(wtxIn.vMerkleBranch!=wtx.vMerkleBranch||wtxIn.nIndex!=wtx.nIndex))
+            if (wtxIn.nIndex != -1 && (wtxIn.vMerkleBranch != wtx.vMerkleBranch || wtxIn.nIndex != wtx.nIndex))
             {
-                wtx.vMerkleBranch=wtxIn.vMerkleBranch;
-                wtx.nIndex=wtxIn.nIndex;
-                fUpdted=true;
+                wtx.vMerkleBranch = wtxIn.vMerkleBranch;
+                wtx.nIndex = wtxIn.nIndex;
+                fUpdated = true;
             }
-            if(wtxIn.fFromMe&&wtxIn.fFromMe!=wtx.fFromMe)
+            if (wtxIn.fFromMe && wtxIn.fFromMe != wtx.fFromMe)
             {
-                wtx.fFromMe=wtxIn.fFromMe;
-                fUpdted=true;
+                wtx.fFromMe = wtxIn.fFromMe;
+                fUpdated = true;
             }
-            if(wtxIn.fSpent&&wtxIn.fSpent!=wtx.fSpent)
+            if (wtxIn.fSpent && wtxIn.fSpent != wtx.fSpent)
             {
-                wtx.fSpent=wtxIn.fSpent;
-                fUpdted=true;
+                wtx.fSpent = wtxIn.fSpent;
+                fUpdated = true;
             }
-            if(!fUpdted)
+            if (!fUpdated)
                 return true;
-
         }
-        if(!wtx.WriteToDisk())
-            return false;
-        vWalletUpdated.push_back(make_pair(hash,fInsertedNew));
 
+        // Write to disk
+        if (!wtx.WriteToDisk())
+            return false;
+
+        // Notify UI
+        vWalletUpdated.push_back(make_pair(hash, fInsertedNew));
     }
 
+    // Refresh UI
     MainFrameRepaint();
     return true;
 }
 
-bool AddToWalletIfMine(const CTransaction& tx,const CBlock* pblock)
+bool AddToWalletIfMine(const CTransaction& tx, const CBlock* pblock)
 {
-    if(tx.IsMine()||mapWallet.count(tx.GetHash()))
+    if (tx.IsMine() || mapWallet.count(tx.GetHash()))
     {
         CWalletTx wtx(tx);
-        if(pblock)
+        // Get merkle branch if transaction was found in a block
+        if (pblock)
             wtx.SetMerkleBranch(pblock);
         return AddToWallet(wtx);
     }
     return true;
 }
 
-bool EraseFromWallet(uin256 hash)
+bool EraseFromWallet(uint256 hash)
 {
     CRITICAL_BLOCK(cs_mapWallet)
     {
-        if(mapWallet.erase(hash))
+        if (mapWallet.erase(hash))
             CWalletDB().EraseTx(hash);
     }
     return true;
 }
 
 
+
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// mapOrphanTransactions
+//
+
 void AddOrphanTx(const CDataStream& vMsg)
 {
     CTransaction tx;
-    CDataStream(vMsg)>>tx;
-    uin256 hash=tx.GetHash();
-    if(mapOrphanTransactions.count(hash))
+    CDataStream(vMsg) >> tx;
+    uint256 hash = tx.GetHash();
+    if (mapOrphanTransactions.count(hash))
         return;
-    CDataStream* pvMsg=mapOrphanTransactions[hash]=new CDataStream(vMsg);
-    foreach(const CTxIn& txin,tx.vin)
-        mapOrphanTransactionsByPrev.insert(make_pair(txin.prevout.hash,pvMsg));
+    CDataStream* pvMsg = mapOrphanTransactions[hash] = new CDataStream(vMsg);
+    foreach(const CTxIn& txin, tx.vin)
+        mapOrphanTransactionsByPrev.insert(make_pair(txin.prevout.hash, pvMsg));
 }
 
-void EraseOrphanTx(uin256 hash)
+void EraseOrphanTx(uint256 hash)
 {
-    if(!mapOrphanTransactions.count(hash))
+    if (!mapOrphanTransactions.count(hash))
         return;
-    const CDataStream* pvMsg=mapOrphanTransactions[hash];
+    const CDataStream* pvMsg = mapOrphanTransactions[hash];
     CTransaction tx;
-    CDataStream(*pvMsg)>>tx;
-    foreach(const CTxIn& txin,tx.vin)
+    CDataStream(*pvMsg) >> tx;
+    foreach(const CTxIn& txin, tx.vin)
     {
-        for(multimap<uin256,CDataStream*>::iterator mi=mapOrphanTransactionsByPrev.lower_bound(txin.prevout.hash);
-            mi!=mapOrphanTransactionsByPrev.upper_bound(txin.prevout.hash);)
+        for (multimap<uint256, CDataStream*>::iterator mi = mapOrphanTransactionsByPrev.lower_bound(txin.prevout.hash);
+             mi != mapOrphanTransactionsByPrev.upper_bound(txin.prevout.hash);)
         {
-            if((*mi).second==pvMsg)
+            if ((*mi).second == pvMsg)
                 mapOrphanTransactionsByPrev.erase(mi++);
             else
                 mi++;
@@ -172,16 +217,27 @@ void EraseOrphanTx(uin256 hash)
 }
 
 
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// CTransaction
+//
+
 bool CTxIn::IsMine() const
 {
     CRITICAL_BLOCK(cs_mapWallet)
     {
-        map<uin256,CWalletTx>::iterator mi=mapWallet.find(prevout.hash);
-        if(mi!=mapWallet.end())
+        map<uint256, CWalletTx>::iterator mi = mapWallet.find(prevout.hash);
+        if (mi != mapWallet.end())
         {
-            const CWalletTx& prev=(*mi).second;
-            if(prevout.n<prev.vout.size())
-                if(prev.vout[prevout.n].IsMine())
+            const CWalletTx& prev = (*mi).second;
+            if (prevout.n < prev.vout.size())
+                if (prev.vout[prevout.n].IsMine())
                     return true;
         }
     }
@@ -192,235 +248,301 @@ int64 CTxIn::GetDebit() const
 {
     CRITICAL_BLOCK(cs_mapWallet)
     {
-        map<uin256,CWalletTx>::iterator mi=mapWallet.find(prevout.hash);
-        if(mi!=mapWallet.end())
+        map<uint256, CWalletTx>::iterator mi = mapWallet.find(prevout.hash);
+        if (mi != mapWallet.end())
         {
-            const CWalletTx& prev=(*mi).second;
-            if(prevout.n<prev.vout.size())
-                if(prev.vout[prevout.n].IsMine())
+            const CWalletTx& prev = (*mi).second;
+            if (prevout.n < prev.vout.size())
+                if (prev.vout[prevout.n].IsMine())
                     return prev.vout[prevout.n].nValue;
         }
     }
     return 0;
 }
 
-
-int64 CWalletTx::GetTxtTime() const
+int64 CWalletTx::GetTxTime() const
 {
-    if(!fTimeReceivedIsTxTime&& hashBlock!=0)
+    if (!fTimeReceivedIsTxTime && hashBlock != 0)
     {
-        map<uin256,CBlockIndex*>::iterator mi=mapBlockIndex.find(hashBlock);
-        if(mi!=mapBlockIndex.end())
+        // If we did not receive the transaction directly, we rely on the block's
+        // time to figure out when it happened.  We use the median over a range
+        // of blocks to try to filter out inaccurate block times.
+        map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hashBlock);
+        if (mi != mapBlockIndex.end())
         {
-            CBlockIndex* pindex=(*mi).second;
-            if(pindex)
+            CBlockIndex* pindex = (*mi).second;
+            if (pindex)
                 return pindex->GetMedianTime();
         }
     }
     return nTimeReceived;
 }
 
+
+
+
+
+
 int CMerkleTx::SetMerkleBranch(const CBlock* pblock)
 {
-    if(fClient)
+    if (fClient)
     {
-        if(hashBlock==0)
+        if (hashBlock == 0)
             return 0;
     }
     else
     {
         CBlock blockTmp;
-        if(pblock==NULL)
+        if (pblock == NULL)
         {
+            // Load the block this tx is in
             CTxIndex txindex;
-            if(!CTxDB("r").ReadTxIndex(GetHash(),txindex))
+            if (!CTxDB("r").ReadTxIndex(GetHash(), txindex))
                 return 0;
-            if(!blockTmp.ReadFromDisk(txindex.pos.nFile,txindex.pos.nBlockPos,true))
+            if (!blockTmp.ReadFromDisk(txindex.pos.nFile, txindex.pos.nBlockPos, true))
                 return 0;
-            pblock=&blockTmp;
+            pblock = &blockTmp;
         }
-        hashBlock=pblock->GetHash();
-        for(nIndex=0;nIndex<pblock->vtx.size();nIndex++)
-            if(pblock->vtx[nIndex]==*(CTransaction*)this)
+
+        // Update the tx's hashBlock
+        hashBlock = pblock->GetHash();
+
+        // Locate the transaction
+        for (nIndex = 0; nIndex < pblock->vtx.size(); nIndex++)
+            if (pblock->vtx[nIndex] == *(CTransaction*)this)
                 break;
-        if(nIndex==pblock->vtx.size())
+        if (nIndex == pblock->vtx.size())
         {
             vMerkleBranch.clear();
-            nIndex=-1;
-            printf("ERROR:SetMerkleBranch():couldn't find tx in block\n");
+            nIndex = -1;
+            printf("ERROR: SetMerkleBranch() : couldn't find tx in block\n");
             return 0;
         }
-        vMerkleBranch=pblock->GetMerkleBranch(nIndex);
+
+        // Fill in merkle branch
+        vMerkleBranch = pblock->GetMerkleBranch(nIndex);
     }
-    map<uin256,CBlockIndex*>::iterator mi=mapBlockIndex.find(hashBlock);
-    if(mi==mapBlockIndex.end())
+
+    // Is the tx in a block that's in the main chain
+    map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hashBlock);
+    if (mi == mapBlockIndex.end())
         return 0;
-    return pindexBest->nHeight-pindex->nHeight+1;
+    CBlockIndex* pindex = (*mi).second;
+    if (!pindex || !pindex->IsInMainChain())
+        return 0;
+
+    return pindexBest->nHeight - pindex->nHeight + 1;
 }
+
 
 
 void CWalletTx::AddSupportingTransactions(CTxDB& txdb)
 {
     vtxPrev.clear();
+
     const int COPY_DEPTH = 3;
-    if(SetMerkleBranch()<COPY_DEPTH)
+    if (SetMerkleBranch() < COPY_DEPTH)
     {
-        vector<uin256> vWorkQueue;
-        foreach(const CTxIn& txin,vin)
+        vector<uint256> vWorkQueue;
+        foreach(const CTxIn& txin, vin)
             vWorkQueue.push_back(txin.prevout.hash);
+
+        // This critsect is OK because txdb is already open
         CRITICAL_BLOCK(cs_mapWallet)
         {
-            map<uin256,const CMerkleTx*>
-                mapWalletPrev;
-            set<uin256>setAlreadyDone;
-            for(int i=0;i<vWorkQueue.size();i++)
+            map<uint256, const CMerkleTx*> mapWalletPrev;
+            set<uint256> setAlreadyDone;
+            for (int i = 0; i < vWorkQueue.size(); i++)
             {
-                uin256 hash = vWorkQueue[i];
-                if(setAlreadyDone.count(hash))
+                uint256 hash = vWorkQueue[i];
+                if (setAlreadyDone.count(hash))
                     continue;
                 setAlreadyDone.insert(hash);
+
                 CMerkleTx tx;
-                if(mapWallet.count(hash))
+                if (mapWallet.count(hash))
                 {
-                    tx=mapWallet[hash];
-                    foreach(const CMerkleTx& txWalletPrev,mapWallet[hash].vtxPrev)
-                        mapWalletPrev[txWalletPrev.GetHash()]=&txWalletPrev;
+                    tx = mapWallet[hash];
+                    foreach(const CMerkleTx& txWalletPrev, mapWallet[hash].vtxPrev)
+                        mapWalletPrev[txWalletPrev.GetHash()] = &txWalletPrev;
                 }
-                else if(mapWalletPrev.count(hash))
+                else if (mapWalletPrev.count(hash))
                 {
-                    tx=*mapWalletPrev[hash];
+                    tx = *mapWalletPrev[hash];
                 }
-                else if(!fClient&&txdb.ReadDiskTx(hash,tx))
+                else if (!fClient && txdb.ReadDiskTx(hash, tx))
                 {
                     ;
                 }
                 else
                 {
-                    printf("ERROR:AddSupportingTransactions():unsupported transaction\n");
+                    printf("ERROR: AddSupportingTransactions() : unsupported transaction\n");
                     continue;
                 }
-                int nDepth=tx.SetMerkleBranch();
+
+                int nDepth = tx.SetMerkleBranch();
                 vtxPrev.push_back(tx);
-                if(nDepth<COPY_DEPTH)
-                    foreach(const CTxIn& txin,tx.vin)
+
+                if (nDepth < COPY_DEPTH)
+                    foreach(const CTxIn& txin, tx.vin)
                         vWorkQueue.push_back(txin.prevout.hash);
             }
         }
     }
-    reverse(vtxPrev.begin().vtxPrev.end());
+
+    reverse(vtxPrev.begin(), vtxPrev.end());
 }
 
 
-bool CTransaction::AcceptTransaction(CTxDB& txdb,bool fCheckInputs,bool* pfMissingInputs)
+
+
+
+
+
+
+
+//5.接收交易
+
+bool CTransaction::AcceptTransaction(CTxDB& txdb, bool fCheckInputs, bool* pfMissingInputs)
 {
-    if(pfMissingInputs)
-        *pfMissingInputs=false;
-    if(IsCoinBase())
-        return error("AcceptTransaction():coinbase as individual tx");
-    if(!CheckTransaction())
-        return error("AcceptTransaction():CheckTransaction failed");
-    uin256 hash=GetHash();
+    if (pfMissingInputs)
+        *pfMissingInputs = false;
+
+    // Coinbase is only valid in a block, not as a loose transaction
+    if (IsCoinBase())
+        return error("AcceptTransaction() : coinbase as individual tx");
+
+    if (!CheckTransaction())
+        return error("AcceptTransaction() : CheckTransaction failed");
+
+    // Do we already have it?
+    uint256 hash = GetHash();
     CRITICAL_BLOCK(cs_mapTransactions)
-        if(mapTransactions.count(hash))
+        if (mapTransactions.count(hash))
             return false;
-    if(fCheckInputs)
-        if(txdb.ContainsTx(hash))
+    if (fCheckInputs)
+        if (txdb.ContainsTx(hash))
             return false;
 
-    CTransaction* ptxOld=NULL;
-    for(int i=0;i<vin.size();i++)
+    // Check for conflicts with in-memory transactions
+    CTransaction* ptxOld = NULL;
+    for (int i = 0; i < vin.size(); i++)
     {
-        COutPoint outpoint=vin[i].prevout;
-        if(mapNextTx.count(outpoint))
+        COutPoint outpoint = vin[i].prevout;
+        if (mapNextTx.count(outpoint))
         {
-            if(i!=0)
+            // Allow replacing with a newer version of the same transaction
+            if (i != 0)
                 return false;
-            ptxOld=mapNextTx[outpoint].ptx;
-            if(!IsNewerThan(*ptxOld))
+            ptxOld = mapNextTx[outpoint].ptx;
+            if (!IsNewerThan(*ptxOld))
                 return false;
-            for(int i=0;i<vin.size();i++)
+            for (int i = 0; i < vin.size(); i++)
             {
-                COutPoint outpoint=vin[i].prevout;
-                if(!mapNextTx.count(outpoint)||mapNextTx[outpoint].ptx!=ptxOld)
+                COutPoint outpoint = vin[i].prevout;
+                if (!mapNextTx.count(outpoint) || mapNextTx[outpoint].ptx != ptxOld)
                     return false;
             }
             break;
         }
     }
 
-    map<uint256,CTxIndex>mapUnused;
-    int64 nFees=0;
-    if(fCheckInputs&&!ConnectInputs(txdb,mapUnused,CDiskTxPos(1,1,1),0,nFees,false,false))
+    // Check against previous transactions
+    map<uint256, CTxIndex> mapUnused;
+    int64 nFees = 0;
+    if (fCheckInputs && !ConnectInputs(txdb, mapUnused, CDiskTxPos(1,1,1), 0, nFees, false, false))
     {
-        if(pfMissingInputs)
-            *pfMissingInputs=true;
-        return error("AcceptTransaction():ConnectInputs failed %s",hash.ToString().substr(0,6).c_str());
+        if (pfMissingInputs)
+            *pfMissingInputs = true;
+        return error("AcceptTransaction() : ConnectInputs failed %s", hash.ToString().substr(0,6).c_str());
     }
 
+    // Store transaction in memory
+    
     CRITICAL_BLOCK(cs_mapTransactions)
     {
-        if(ptxOld)
+        if (ptxOld)
         {
-            printf("mapTransaction.erase(%s) replacing with new version\n",ptxOld->GetHash().ToString().c_str());
+            printf("mapTransaction.erase(%s) replacing with new version\n", ptxOld->GetHash().ToString().c_str());
             mapTransactions.erase(ptxOld->GetHash());
         }
         AddToMemoryPool();
     }
-    if(ptxOld)
+
+    ///// are we sure this is ok when loading transactions or restoring block txes
+    // If updated, erase old tx from wallet
+    if (ptxOld)
         EraseFromWallet(ptxOld->GetHash());
-    printf("AcceptTransaction():accept %s\n",hash.ToString().substr(0,6).c_str());
+
+    printf("AcceptTransaction(): accepted %s\n", hash.ToString().substr(0,6).c_str());
     return true;
 }
 
+//把交易信息添加到交易内存池
 bool CTransaction::AddToMemoryPool()
 {
+    // Add to memory pool without checking anything.  Don't call this directly,
+    // call AcceptTransaction to properly check the transaction first.
     CRITICAL_BLOCK(cs_mapTransactions)
     {
-        uin256 hash=GetHash();
-        mapTransactions[hash]=*this;
-        for(int i=0;i<vin.size();i++)
-            mapNextTx[vin[i].prevout]=CInPoint(&mapTransactions[hash],i);
+        uint256 hash = GetHash();
+        mapTransactions[hash] = *this;
+        for (int i = 0; i < vin.size(); i++)
+            mapNextTx[vin[i].prevout] = CInPoint(&mapTransactions[hash], i);
         nTransactionsUpdated++;
     }
     return true;
 }
 
+
 bool CTransaction::RemoveFromMemoryPool()
 {
+    // Remove transaction from memory pool
     CRITICAL_BLOCK(cs_mapTransactions)
     {
-        foreach(const CTxIn& txin,vin)
-           mapNextTx.erase(txin.prevout);
+        foreach(const CTxIn& txin, vin)
+            mapNextTx.erase(txin.prevout);
         mapTransactions.erase(GetHash());
         nTransactionsUpdated++;
     }
     return true;
 }
 
-int CMerkleTx::GetDepthInMainChain()
+
+
+
+
+
+int CMerkleTx::GetDepthInMainChain() const
 {
-    if(hashBlock==0||nIndex==-1)
+    if (hashBlock == 0 || nIndex == -1)
         return 0;
-    map<uin256,CBlockIndex*>::iterator mi=mapBlockIndex.find(hashBlock);
-    if(mi==mapBlockIndex.end())
+
+    // Find the block it claims to be in
+    map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hashBlock);
+    if (mi == mapBlockIndex.end())
         return 0;
-    CBlockIndex* pindex=(*mi).second;
-    if(!pindex||!pindex->IsInMainChain())
+    CBlockIndex* pindex = (*mi).second;
+    if (!pindex || !pindex->IsInMainChain())
         return 0;
-    if(!fMerkleVerified)
+
+    // Make sure the merkle branch connects to this block
+    if (!fMerkleVerified)
     {
-        if(CBlock::CheckMerkleBranch(GetHash(),vMerkleBranch,nIndex)!=pindex->hashMerkleRoot)
+        if (CBlock::CheckMerkleBranch(GetHash(), vMerkleBranch, nIndex) != pindex->hashMerkleRoot)
             return 0;
-        fMerkleVerified=true;
+        fMerkleVerified = true;
     }
-    return pindexBest->nHeight-pindex->nHeight+1;
+
+    return pindexBest->nHeight - pindex->nHeight + 1;
 }
+
 
 int CMerkleTx::GetBlocksToMaturity() const
 {
-    if(!IsCoinBase())
+    if (!IsCoinBase())
         return 0;
-    return max(0,(COINBASE_MATURITY+20)-GetDepthInMainChain());
+    return max(0, (COINBASE_MATURITY+20) - GetDepthInMainChain());
 }
 
 
@@ -437,6 +559,8 @@ bool CMerkleTx::AcceptTransaction(CTxDB& txdb, bool fCheckInputs)
         return CTransaction::AcceptTransaction(txdb, fCheckInputs);
     }
 }
+
+
 
 bool CWalletTx::AcceptWalletTransaction(CTxDB& txdb, bool fCheckInputs)
 {
@@ -2392,7 +2516,7 @@ bool SelectCoins(int64 nTargetValue, set<CWalletTx*>& setCoinsRet)
  2.填充交易的输入交易（vin）先从钱包的交易信息中选择合适的比特币（selectCoins函数），填充到交易的输入交易中。
  3.签名（CTXin。scriptSig）对输入交易scriptsig签名（signsignature函数）。由新的交易信息、私钥计算哈希值
  （signatureHash函数），填充到输入交易的scriptSig中（Slover函数）
-
+ 
  */
 
 
@@ -2482,7 +2606,7 @@ bool CreateTransaction(CScript scriptPubKey, int64 nValue, CWalletTx& wtxNew, in
  传播交易（RelayTransaction函数），由交易信息的哈希值构造CInv，类型为MSG_TX,添加到每个节点的
  发送单（vInventoryToSend）中，发送信息（sendMessages）时把节点中的发送清单中的交易信息以“inv”
  命令发出去
-
+ 
  */
 
 // Call after CreateTransaction unless you want to abort
@@ -2551,16 +2675,4 @@ bool SendMoney(CScript scriptPubKey, int64 nValue, CWalletTx& wtxNew)
     }
     MainFrameRepaint();
     return true;
-}
-
-
-
-
-
-#include <iostream>
-
-int main(int argc, const char * argv[]) {
-    // insert code here...
-    std::cout << "Hello, World!\n";
-    return 0;
 }
