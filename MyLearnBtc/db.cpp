@@ -318,7 +318,7 @@ CBlockIndex* InsertBlockIndex(uint256 hash)
 
     return pindexNew;
 }
-
+//
 bool CTxDB::LoadBlockIndex()
 {
     // Get cursor
@@ -400,7 +400,9 @@ bool CAddrDB::WriteAddress(const CAddress& addr)
 {
     return Write(make_pair(string("addr"), addr.GetKey()), addr);
 }
-
+//1 LoadAdreess方法
+//LoadAdreess方法从地址­文件addr.dat中读取对应的地址信息，放入对应的全局内存对象mapAddresses中
+//map<vector<unsigned char>,CAddress>mapAddresses节点地址映射：key对应的是ip地址+端口，value是CAddress对象
 bool CAddrDB::LoadAddresses()
 {
     CRITICAL_BLOCK(cs_mapAddresses)
@@ -445,6 +447,7 @@ bool CAddrDB::LoadAddresses()
             {
                 CAddress addr;
                 ssValue >> addr;
+                //1.1将文件或者库中的地址读入内存对象mapAddresses
                 mapAddresses.insert(make_pair(addr.GetKey(), addr));
             }
         }
