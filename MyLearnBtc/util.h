@@ -90,7 +90,7 @@ void AddTimeData(unsigned int ip, int64 nTime);
 
 
 
-
+//wxCriticalSection==>wx==>wxWidgets      \wxWidgets     http://www.wxwidgets.org/downloads/
 
 
 

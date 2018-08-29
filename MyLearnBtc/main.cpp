@@ -401,8 +401,8 @@ void CWalletTx::AddSupportingTransactions(CTxDB& txdb)
 
 
 
-//5.接收交易
-
+//1.1.3 交易接受处理
+//判断交易能不能被接受，如果能接受将对应的交易放入全局变量中mapTransactions，mapNextTx中
 bool CTransaction::AcceptTransaction(CTxDB& txdb, bool fCheckInputs, bool* pfMissingInputs)
 {
     if (pfMissingInputs)
@@ -683,6 +683,9 @@ int64 CBlock::GetBlockValue(int64 nFees) const
     return nSubsidy + nFees;
 }
 
+//1.2 工作量难度获得
+//// 根据前一个block对应的工作量获取下一个block获取需要的工作量
+//主要是保证对应的区块10分钟产生一个，14天更新一下对应的工作量难度（即是产生2016区块就要更新一下工作量难度）
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast)
 {
     const unsigned int nTargetTimespan = 14 * 24 * 60 * 60; // two weeks
@@ -731,12 +734,7 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast)
 
 
 
-
-
-
-
-
-
+//1.1.2释放交易对应的输入占用的标记，即是释放交易输入对应的交易索引中的标记，并将交易从库或者mapTestPool中进行移除。
 bool CTransaction::DisconnectInputs(CTxDB& txdb)
 {
     // Relinquish previous transactions' spent pointers
@@ -769,7 +767,7 @@ bool CTransaction::DisconnectInputs(CTxDB& txdb)
     return true;
 }
 
-
+//1.1.1对交易的输入进行判断，并对交易输入在对应交易输入索引中进行占用（标记为花费），并将对应的交易保存起来。
 bool CTransaction::ConnectInputs(CTxDB& txdb, map<uint256, CTxIndex>& mapTestPool, CDiskTxPos posThisTx, int nHeight, int64& nFees, bool fBlock, bool fMiner, int64 nMinFee)
 {
     // Take over previous transactions' spent pointers
@@ -779,7 +777,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, map<uint256, CTxIndex>& mapTestPoo
         for (int i = 0; i < vin.size(); i++)
         {
             COutPoint prevout = vin[i].prevout;
-
+            //获取对应输入交易的交易索引
             // Read txindex
             CTxIndex txindex;
             bool fFound = true;
@@ -798,6 +796,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, map<uint256, CTxIndex>& mapTestPoo
 
             // Read txPrev
             CTransaction txPrev;
+            //条件为库中未找到，在mapTransactions中找CTransaction
             if (!fFound || txindex.pos == CDiskTxPos(1,1,1))
             {
                 // Get prev tx from single transactions in memory
@@ -934,7 +933,13 @@ bool CBlock::DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 
     return true;
 }
-
+/*
+ 1.4 block接收处理
+ 
+ 1.4.1 区块连接处理
+ 
+ */
+// 区块链接：每一个交易链接，增加到区块索引链中
 bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 {
     //// issue here: it doesn't know the version
@@ -2353,6 +2358,10 @@ bool BitcoinMiner()
                     break;
                 if (!fGenerateBitcoins)
                     break;
+                //1.3 区块对应的创建时间
+                /*
+                 在新建区块的时候，要设置对应区块的时间，由于是P2P的，没有中心化节点能够获得对应的时间，所以需要从对应的区块链中区块的时间中取中位数，然后和当前时间取最大值
+                 */
                 tmp.block.nTime = pblock->nTime = max(pindexPrev->GetMedianTimePast()+1, GetAdjustedTime());
             }
         }

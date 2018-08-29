@@ -800,13 +800,6 @@ inline void RelayMessage<>(const CInv& inv, const CDataStream& ss)
     RelayInventory(inv);
 }
 
-
-
-
-
-
-
-
 //
 // Templates for the publish and subscription system.
 // The object being published as T& obj needs to have:
