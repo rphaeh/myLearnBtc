@@ -977,6 +977,11 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex)
 
 
 
+/**
+ 1.4.2区块分叉处理
+
+ */
+// 重新组织区块的索引：因为此时已经出现区块链分叉
 bool Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 {
     printf("*** REORGANIZE ***\n");
@@ -1075,6 +1080,10 @@ bool Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 }
 
 
+/**
+ 1.4.3将区块新增到区块索引链中
+ 将当前区块增加到对应的区块索引链中mapBlockIndex
+ */
 bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos)
 {
     // Check for duplicate
@@ -1195,6 +1204,11 @@ bool CBlock::CheckBlock() const
     return true;
 }
 
+/**
+ 1.4.4区块接受处理
+
+// 判断当前区块能够被接收
+ */
 bool CBlock::AcceptBlock()
 {
     // Check for duplicate

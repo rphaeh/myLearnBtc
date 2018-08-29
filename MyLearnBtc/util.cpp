@@ -33,10 +33,10 @@ public:
         for (int i = 0; i < CRYPTO_num_locks(); i++)
             lock_cs[i] = CreateMutex(NULL,FALSE,NULL);
         CRYPTO_set_locking_callback(win32_locking_callback);
-
+        
         // Seed random number generator with screen scrape and other hardware sources
         RAND_screen();
-
+        
         // Seed random number generator with perfmon data
         RandAddSeed(true);
     }
@@ -61,17 +61,17 @@ void RandAddSeed(bool fPerfmon)
     QueryPerformanceCounter(&PerformanceCount);
     RAND_add(&PerformanceCount, sizeof(PerformanceCount), 1.5);
     memset(&PerformanceCount, 0, sizeof(PerformanceCount));
-
+    
     static int64 nLastPerfmon;
     if (fPerfmon || GetTime() > nLastPerfmon + 5 * 60)
     {
         nLastPerfmon = GetTime();
-
+        
         // Seed with the entire set of perfmon data
         unsigned char pdata[250000];
         memset(pdata, 0, sizeof(pdata));
         unsigned long nSize = sizeof(pdata);
-        long ret = RegQueryValueEx(HKEY_PERFORMANCE_DATA, "Global", NULL, NULL, pdata, &nSize);
+        long ret = RegQueryValueEx(HKEY_PERFORMANCE_DATA, L"Global", NULL, NULL, pdata, &nSize);
         RegCloseKey(HKEY_PERFORMANCE_DATA);
         if (ret == ERROR_SUCCESS)
         {
@@ -80,13 +80,7 @@ void RandAddSeed(bool fPerfmon)
             RAND_add(&hash, sizeof(hash), min(nSize/500.0, (double)sizeof(hash)));
             hash = 0;
             memset(pdata, 0, nSize);
-
-            time_t nTime;
-            time(&nTime);
-            struct tm* ptmTime = gmtime(&nTime);
-            char pszTime[200];
-            strftime(pszTime, sizeof(pszTime), "%x %H:%M:%S", ptmTime);
-            printf("%s  RandAddSeed() got %d bytes of performance data\n", pszTime, nSize);
+            printf("RandAddSeed() got %d bytes of performance data\n", nSize);
         }
     }
 }
@@ -176,15 +170,15 @@ void PrintException(std::exception* pex, const char* pszThread)
 {
     char pszModule[260];
     pszModule[0] = '\0';
-    GetModuleFileName(NULL, pszModule, sizeof(pszModule));
+    GetModuleFileNameA(NULL, pszModule, sizeof(pszModule));
     _strlwr(pszModule);
     char pszMessage[1000];
     if (pex)
         snprintf(pszMessage, sizeof(pszMessage),
-            "EXCEPTION: %s       \n%s       \n%s in %s       \n", typeid(*pex).name(), pex->what(), pszModule, pszThread);
+                 "EXCEPTION: %s       \n%s       \n%s in %s       \n", typeid(*pex).name(), pex->what(), pszModule, pszThread);
     else
         snprintf(pszMessage, sizeof(pszMessage),
-            "UNKNOWN EXCEPTION       \n%s in %s       \n", pszModule, pszThread);
+                 "UNKNOWN EXCEPTION       \n%s in %s       \n", pszModule, pszThread);
     printf("\n\n************************\n%s", pszMessage);
     if (wxTheApp)
         wxMessageBox(pszMessage, "Error", wxOK | wxICON_ERROR);
@@ -275,7 +269,7 @@ bool ParseMoney(const char* pszIn, int64& nRet)
 bool FileExists(const char* psz)
 {
 #ifdef WIN32
-    return GetFileAttributes(psz) != -1;
+    return GetFileAttributesA(psz) != -1;
 #else
     return access(psz, 0) != -1;
 #endif
@@ -302,7 +296,7 @@ uint64 GetRand(uint64 nMax)
 {
     if (nMax == 0)
         return 0;
-
+    
     // The range of the random source must be a multiple of the modulus
     // to give every possible output value an equal possibility
     uint64 nRange = (_UI64_MAX / nMax) * nMax;
@@ -332,7 +326,7 @@ uint64 GetRand(uint64 nMax)
 // note: NTP isn't implemented yet, so until then we just use the median
 //  of other nodes clocks to correct ours.
 //
-
+// 返回的单位为秒
 int64 GetTime()
 {
     return time(NULL);
@@ -340,32 +334,34 @@ int64 GetTime()
 
 static int64 nTimeOffset = 0;
 
+// 获取对应的调整时间：当前时间 + 时间偏移
 int64 GetAdjustedTime()
 {
     return GetTime() + nTimeOffset;
 }
-
+// 增加时间数据
 void AddTimeData(unsigned int ip, int64 nTime)
 {
-    int64 nOffsetSample = nTime - GetTime();
-
-    // Ignore duplicates
+    int64 nOffsetSample = nTime - GetTime(); // 时间偏移样本
+    
+    // Ignore duplicates 忽略重复已经知道的ip
     static set<unsigned int> setKnown;
     if (!setKnown.insert(ip).second)
         return;
-
+    
     // Add data
     static vector<int64> vTimeOffsets;
     if (vTimeOffsets.empty())
         vTimeOffsets.push_back(0);
     vTimeOffsets.push_back(nOffsetSample);
     printf("Added time data, samples %d, ip %08x, offset %+I64d (%+I64d minutes)\n", vTimeOffsets.size(), ip, vTimeOffsets.back(), vTimeOffsets.back()/60);
+    // 时间偏移样本对应的大小要大于5，且是奇数（因为要取对应的中位数）
     if (vTimeOffsets.size() >= 5 && vTimeOffsets.size() % 2 == 1)
     {
         sort(vTimeOffsets.begin(), vTimeOffsets.end());
         int64 nMedian = vTimeOffsets[vTimeOffsets.size()/2];
         nTimeOffset = nMedian;
-        if ((nMedian > 0 ? nMedian : -nMedian) > 5 * 60)
+        if ((nMedian > 0 ? nMedian : -nMedian) > 5 * 60) // 大于5分钟
         {
             // Only let other nodes change our clock so far before we
             // go to the NTP servers
@@ -373,7 +369,7 @@ void AddTimeData(unsigned int ip, int64 nTime)
             ///    to make sure it doesn't get changed again
         }
         foreach(int64 n, vTimeOffsets)
-            printf("%+I64d  ", n);
+        printf("%+I64d  ", n);
         printf("|  nTimeOffset = %+I64d  (%+I64d minutes)\n", nTimeOffset, nTimeOffset/60);
     }
 }
