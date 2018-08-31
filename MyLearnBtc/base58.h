@@ -54,6 +54,7 @@ inline string EncodeBase58(const unsigned char* pbegin, const unsigned char* pen
     return str;
 }
 
+//通过EncodeBase58编码生成比特币地址
 inline string EncodeBase58(const vector<unsigned char>& vch)
 {
     return EncodeBase58(&vch[0], &vch[0] + vch.size());
@@ -113,7 +114,7 @@ inline bool DecodeBase58(const string& str, vector<unsigned char>& vchRet)
 
 
 
-
+//公钥HASH后缀加入4字节的校验码
 inline string EncodeBase58Check(const vector<unsigned char>& vchIn)
 {
     // add 4-byte hash check to the end
@@ -153,7 +154,7 @@ inline bool DecodeBase58Check(const string& str, vector<unsigned char>& vchRet)
 
 
 static const unsigned char ADDRESSVERSION = 0;
-
+//通过公钥Hash生成地址,公钥HASH前缀加上一个字节的版本号
 inline string Hash160ToAddress(uint160 hash160)
 {
     // add 1-byte version number to the front

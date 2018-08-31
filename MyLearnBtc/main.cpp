@@ -60,8 +60,9 @@ CAddress addrIncoming;
 //////////////////////////////////////////////////////////////////////////////
 //
 // mapKeys
-//
+//公钥和私钥的存储
 // 将对应key的信息存放到对应的全局变量中
+// 私钥存储在mapKeys结构中（键为公钥），公钥存储在mapPubKeys结果中（键为公钥HASH）
 bool AddKey(const CKey& key)
 {
     CRITICAL_BLOCK(cs_mapKeys)
@@ -1530,6 +1531,10 @@ FILE* AppendBlockFile(unsigned int& nFileRet)
     }
 }
 
+/**
+ 2 LoadBlockIndex方法
+首先调用CTxDB 类的LoadBlockIndex()函数（同时CTxDB 的构造函数默认打开blkindex.dat文件）。如果打开blkindex.dat失败，则创建创世块
+ */
 bool LoadBlockIndex(bool fAllowNew)
 {
     //
@@ -1565,22 +1570,28 @@ bool LoadBlockIndex(bool fAllowNew)
         //     CTxOut(nValue=50.00000000, scriptPubKey=0x5F1DF16B2B704C8A578D0B)
         //   vMerkleTree: 4a5e1e
 
+        //时间戳是作为存在性证明(Proof of existence)的关键参数
         // Genesis block
         char* pszTimestamp = "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks";
         CTransaction txNew;
         txNew.vin.resize(1);
         txNew.vout.resize(1);
         txNew.vin[0].scriptSig     = CScript() << 486604799 << CBigNum(4) << vector<unsigned char>((unsigned char*)pszTimestamp, (unsigned char*)pszTimestamp + strlen(pszTimestamp));
+        //创世币的奖励为50BTC，输入为空，输出公钥为
         txNew.vout[0].nValue       = 50 * COIN;
         txNew.vout[0].scriptPubKey = CScript() << CBigNum("0x5F1DF16B2B704C8A578D0BBAF74D385CDE12C11EE50455F3C438EF4C3FBCF649B6DE611FEAE06279A60939E028A8D65C10B73071A6F16719274855FEB0FD8A6704") << OP_CHECKSIG;
+        //初始化区块
+        /*
+         其中nNonce 的值设定使得该块的hash是以一串0开头的。对于块数据的一点点改变（比如nonce）都会引起block hash的巨大变化。由于逆向预测hash值相对应的一组bit值（hash原文）是不可行的，在尝试足够多的nonce值且计算每个nonce值相对应的block hash之后可以找到一个满足有指定数量 0 bits (0比特位) 的hash值。
+         */
         CBlock block;
         block.vtx.push_back(txNew);
-        block.hashPrevBlock = 0;
-        block.hashMerkleRoot = block.BuildMerkleTree();
-        block.nVersion = 1;
-        block.nTime    = 1231006505;
-        block.nBits    = 0x1d00ffff;
-        block.nNonce   = 2083236893;
+        block.hashPrevBlock = 0;// 前一区块为0
+        block.hashMerkleRoot = block.BuildMerkleTree();//计算交易的Merkle值
+        block.nVersion = 1;//版本号为1
+        block.nTime    = 1231006505;// 北京时间为2009/1/4 2:15:5
+        block.nBits    = 0x1d00ffff;//记录本区块难度
+        block.nNonce   = 2083236893;// 随机数
 
             //// debug print, delete this later
             printf("%s\n", block.GetHash().ToString().c_str());
@@ -1588,15 +1599,18 @@ bool LoadBlockIndex(bool fAllowNew)
             printf("%s\n", hashGenesisBlock.ToString().c_str());
             txNew.vout[0].scriptPubKey.print();
             block.print();
+        //HASH校验 校验交易的Merkle值和区块Hash
             assert(block.hashMerkleRoot == uint256("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
 
         assert(block.GetHash() == hashGenesisBlock);
 
         // Start new block file
+        //区块写入磁盘中 文件名为blk0001.dat，后续区块名字递增，如blk0002.dat …
         unsigned int nFile;
         unsigned int nBlockPos;
         if (!block.WriteToDisk(!fClient, nFile, nBlockPos))
             return error("LoadBlockIndex() : writing genesis block to disk failed");
+        //增加区块索引
         if (!block.AddToBlockIndex(nFile, nBlockPos))
             return error("LoadBlockIndex() : genesis block not accepted");
     }
@@ -2323,6 +2337,10 @@ void BlockSHA256(const void* pin, unsigned int nBlocks, void* pout)
 }
 
 // 节点挖矿
+/*
+ 流程：新建公私钥->新建币基交易->新建区块保存币基交易->处理交易池中信息->新增创币奖励费和交易费到区块中
+ ->工作量证明->区块处理
+ */
 bool BitcoinMiner()
 {
     printf("BitcoinMiner started\n");
@@ -2361,7 +2379,7 @@ bool BitcoinMiner()
 
         //创建新的区块
         // Create new block
-        //
+        //创建新块并保存创币交易
         auto_ptr<CBlock> pblock(new CBlock());
         if (!pblock.get())
             return false;
@@ -2370,6 +2388,12 @@ bool BitcoinMiner()
         // Add our coinbase tx as first transaction
         pblock->vtx.push_back(txNew);
 
+        /*
+         收集最新的验证通过的交易
+         结束条件是：
+         (1)mapTransactions中所有交易处理完
+         (2)区块大小达到 MAX_SIZE/2才结束。
+         */
         // Collect the latest transactions into the block
         int64 nFees = 0;
         CRITICAL_BLOCK(cs_main)
@@ -2437,7 +2461,8 @@ bool BitcoinMiner()
             unsigned char pchPadding1[64];
         }
         tmp;
-
+        
+        //计算交易的Merkle值
         tmp.block.nVersion       = pblock->nVersion;
         tmp.block.hashPrevBlock  = pblock->hashPrevBlock  = (pindexPrev ? pindexPrev->GetBlockHash() : 0);
         tmp.block.hashMerkleRoot = pblock->hashMerkleRoot = pblock->BuildMerkleTree();
@@ -2463,6 +2488,10 @@ bool BitcoinMiner()
 
 
             // 挖矿成功
+            /*
+             工作量证明
+             如果当前随机hash小于等于目标hash值，表示该区块满足难度要求，则处理该区块ProcessBlock（
+             */
             if (hash <= hashTarget)
             {
                 pblock->nNonce = tmp.block.nNonce;

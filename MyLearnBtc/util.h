@@ -389,6 +389,7 @@ uint256 SerializeHash(const T& obj, int nType=SER_GETHASH, int nVersion=VERSION)
     return Hash(ss.begin(), ss.end());
 }
 
+//通过公钥生成公钥HASH,公钥先使用SHA256函数再使用RIPEMD160函数生成公钥HASH
 inline uint160 Hash160(const vector<unsigned char>& vch)
 {
     uint256 hash1;

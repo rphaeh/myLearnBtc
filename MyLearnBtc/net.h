@@ -453,7 +453,7 @@ public:
     bool fNetworkNode; // 设置对应的节点为网络节点，是因为从对应的本地节点列表中没有查询到
     bool fDisconnect; // 端口链接的标记
 protected:
-    int nRefCount; // 使用技术器
+    int nRefCount; // 使用计数器
 public:
     int64 nReleaseTime; // 节点释放的时间
     map<uint256, CRequestTracker> mapRequests;

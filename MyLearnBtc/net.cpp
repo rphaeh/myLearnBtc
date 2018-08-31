@@ -136,6 +136,12 @@ bool GetMyExternalIP(unsigned int& ipRet)
 
 
 // 将地址信息存储在地址库中
+
+/**
+ 判断有没有用户自定义的地址信息（信息位于addr.txt中）。
+ 如果有自定义地址信息，则获取对应地址信息，如果该地址不在mapAddresses中，则保存到mapAddresses并且写入addr.dat配置文件中；
+ 否则将nServices信息写入addr.dat配置文件中。
+ */
 bool AddAddress(CAddrDB& addrdb, const CAddress& addr)
 {
     // 地址不能路由，则不将此地址加入地址库中
@@ -324,6 +330,7 @@ CNode* ConnectNode(CAddress addrConnect, int64 nTimeout)
     
     // 对请求的地址进行连接
     // Connect
+    //连接到其他节点，并将节点信息保存到vNodes中
     SOCKET hSocket;
     if (ConnectSocket(addrConnect, hSocket))
     {
@@ -399,7 +406,8 @@ void ThreadSocketHandler(void* parg)
         Sleep(5000);
     }
 }
-// socket 处理，parag对应的是本地节点开启的监听socket
+
+// 4.2 socket 处理，parag对应的是本地节点开启的监听socket
 void ThreadSocketHandler2(void* parg)
 {
     printf("ThreadSocketHandler started\n");
@@ -558,7 +566,7 @@ void ThreadSocketHandler2(void* parg)
         
         
         // 如果fdsetRecv中有监听socket，则接收改监听socket对应的链接请求，并将链接请求设置为新的节点
-        // Accept new connections
+        // Accept new connections接受新的连接并保存到vNodes中
         // 判断发送缓冲区中是否有对应的socket，如果有则接收新的交易
         if (FD_ISSET(hListenSocket, &fdsetRecv))
         {
@@ -595,7 +603,7 @@ void ThreadSocketHandler2(void* parg)
             
             // 从节点对应的socket中读取对应的数据，将数据放入节点的接收缓冲区中
             // Receive
-            //
+            //接收信息并保存到pnode->vRecv中
             if (FD_ISSET(hSocket, &fdsetRecv))
             {
                 TRY_CRITICAL_BLOCK(pnode->cs_vRecv)
@@ -631,7 +639,7 @@ void ThreadSocketHandler2(void* parg)
             
             // 将节点对应的发送缓冲中的内容发送出去
             // Send
-            //
+            //从pnode->vSend中获取消息并发送出去
             if (FD_ISSET(hSocket, &fdsetSend))
             {
                 TRY_CRITICAL_BLOCK(pnode->cs_vSend)
@@ -691,7 +699,7 @@ void ThreadOpenConnections(void* parg)
         Sleep(5000);
     }
 }
-// 对于每一个打开节点的链接，进行节点之间信息通信，获得节点对应的最新信息，比如节点对应的知道地址进行交换等
+//4.1 对于每一个打开节点的链接，进行节点之间信息通信，获得节点对应的最新信息，比如节点对应的知道地址进行交换等
 void ThreadOpenConnections2(void* parg)
 {
     printf("ThreadOpenConnections started\n");
@@ -764,6 +772,7 @@ void ThreadOpenConnections2(void* parg)
                  map::lower_bound(key):返回map中第一个大于或等于key的迭代器指针
                  map::upper_bound(key):返回map中第一个大于key的迭代器指针
                  */
+                //遍历地址映射表mapAddresses并保存地址到mapIP中
                 for (map<vector<unsigned char>, CAddress>::iterator mi = mapAddresses.lower_bound(CAddress(ipC, 0).GetKey());
                      mi != mapAddresses.upper_bound(CAddress(ipC | ~nIPCMask, 0xffff).GetKey());
                      ++mi)
@@ -778,6 +787,7 @@ void ThreadOpenConnections2(void* parg)
             if (mapIP.empty())
                 break;
             
+            //遍历mapIP并与节点建立连接ConnectNode
             // Choose a random IP in the class C
             map<unsigned int, vector<CAddress> >::iterator mi = mapIP.begin();
             boost::iterators::advance_adl_barrier::advance(mi, GetRand(mapIP.size())); // 将指针定位到随机位置
@@ -848,6 +858,10 @@ void ThreadMessageHandler(void* parg)
     }
 }
 // 消息处理线程
+
+/**
+ 遍历vNodes节点，获取pnode节点中的消息，通过ProcessMessages函数处理当前节点收到的消息，通过SendMessages处理当前节点需要发送的消息。
+ */
 void ThreadMessageHandler2(void* parg)
 {
     printf("ThreadMessageHandler started\n");
@@ -890,7 +904,7 @@ void ThreadMessageHandler2(void* parg)
 
 
 
-
+//执行矿工处理函数
 //// todo: start one thread per processor, use getenv("NUMBER_OF_PROCESSORS")
 void ThreadBitcoinMiner(void* parg)
 {
@@ -915,6 +929,11 @@ void ThreadBitcoinMiner(void* parg)
 
 
 // 启动节点
+
+/**
+创建四类线程：获取其他节点地址线程ThreadIRCSeed、接受其他节点连接请求ThreadSocketHandler、
+ 连接其他节点ThreadOpenConnections、消息处理ThreadMessageHandler
+ */
 bool StartNode(string& strError)
 {
     strError = "";
@@ -1013,27 +1032,28 @@ bool StartNode(string& strError)
      所以IRC的中文名为“因特网中继聊天”。
      */
     // Get addresses from IRC and advertise ours
+    //获取其他比特币服务器节点地址ThreadIRCSeed
     if (_beginthread(ThreadIRCSeed, 0, NULL) == -1)
         printf("Error: _beginthread(ThreadIRCSeed) failed\n");
     
-    // 启动线程
+    //
     //
     // Start threads
-    //
+    //接受其他比特币服务器节点连接请求ThreadSocketHandler->ThreadSocketHandler2
     if (_beginthread(ThreadSocketHandler, 0, new SOCKET(hListenSocket)) == -1)
     {
         strError = "Error: _beginthread(ThreadSocketHandler) failed";
         printf("%s\n", strError.c_str());
         return false;
     }
-    
+    //连接其他比特币服务器节点ThreadOpenConnections
     if (_beginthread(ThreadOpenConnections, 0, NULL) == -1)
     {
         strError = "Error: _beginthread(ThreadOpenConnections) failed";
         printf("%s\n", strError.c_str());
         return false;
     }
-    
+    //消息处理线程ThreadMessageHandler
     if (_beginthread(ThreadMessageHandler, 0, NULL) == -1)
     {
         strError = "Error: _beginthread(ThreadMessageHandler) failed";

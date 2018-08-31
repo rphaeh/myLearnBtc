@@ -319,6 +319,9 @@ CBlockIndex* InsertBlockIndex(uint256 hash)
     return pindexNew;
 }
 //
+/**
+ LoadBlockIndex方法从块索引文件blkindex.dat中读取对应的块索引信息，放入对应的全局内存对象mapBlockIndex中
+ */
 bool CTxDB::LoadBlockIndex()
 {
     // Get cursor
@@ -327,6 +330,11 @@ bool CTxDB::LoadBlockIndex()
         return false;
 
     unsigned int fFlags = DB_SET_RANGE;
+ 
+    /**
+     从blkindex.dat文件中匹配字符位“blockindex”的key值，进而获取对应区块索引信息，
+     如果mapBlockIndex中不存在该区块，则插入mapBlockIndex中向量中。
+     */
     loop
     {
         // Read next record
@@ -361,7 +369,8 @@ bool CTxDB::LoadBlockIndex()
             pindexNew->nTime          = diskindex.nTime;
             pindexNew->nBits          = diskindex.nBits;
             pindexNew->nNonce         = diskindex.nNonce;
-
+            
+            //如果该区块是创世块pindexGenesisBlock，则保存到创世块索引pindexGenesisBlock中
             // Watch for genesis block and best block
             if (pindexGenesisBlock == NULL && diskindex.GetBlockHash() == hashGenesisBlock)
                 pindexGenesisBlock = pindexNew;
@@ -372,6 +381,7 @@ bool CTxDB::LoadBlockIndex()
         }
     }
 
+    //从配置文件blkindex.dat中找到字符位“hashBestChain”的key值，取出索引保存到最长链索引pindexBest中以及取出高度保存到nBestHeight 中
     if (!ReadHashBestChain(hashBestChain))
     {
         if (pindexGenesisBlock == NULL)
@@ -423,7 +433,7 @@ bool CAddrDB::LoadAddresses()
             }
             catch (...) { }
         }
-
+        //从addr.dat文件中匹配key为“addr”，从而获取对应地址信息，并插入到mapAddresses向量中。
         // Get cursor
         Dbc* pcursor = GetCursor();
         if (!pcursor)
@@ -465,7 +475,7 @@ bool CAddrDB::LoadAddresses()
 
     return true;
 }
-
+//首先调用此方法
 bool LoadAddresses()
 {
     return CAddrDB("cr+").LoadAddresses();
@@ -499,6 +509,10 @@ bool CReviewDB::WriteReviews(uint256 hash, const vector<CReview>& vReviews)
 // CWalletDB
 //
 
+/**
+ 3 LoadWallet方法
+ LoadWallet方法从文件wallet.dat中读取对应的钱包交易信息和其他的配置信息，放入到不同的全局内存对象中
+  */
 bool CWalletDB::LoadWallet(vector<unsigned char>& vchDefaultKeyRet)
 {
     vchDefaultKeyRet.clear();
@@ -528,12 +542,14 @@ bool CWalletDB::LoadWallet(vector<unsigned char>& vchDefaultKeyRet)
             // is just the two items serialized one after the other
             string strType;
             ssKey >> strType;
+            //map<string,string> mapAddressBook地址和名称的映射，其中key为地址，value为名称
             if (strType == "name")
             {
                 string strAddress;
                 ssKey >> strAddress;
                 ssValue >> mapAddressBook[strAddress];
             }
+            //map<uint256, CWalletTx>mapWalle钱包交易对应的map，其中key对应的钱包交易的hash值
             else if (strType == "tx")
             {
                 uint256 hash;
@@ -552,6 +568,7 @@ bool CWalletDB::LoadWallet(vector<unsigned char>& vchDefaultKeyRet)
                 //    wtx.hashBlock.ToString().substr(0,14).c_str(),
                 //    wtx.mapValue["message"].c_str());
             }
+            //map<vector<unsigned char>, CPrivKey> mapKeys公钥和私钥对应的映射关系，其中key为公钥，value为私钥；map<uint160, vector<unsigned char> > mapPubKeys公钥的hash值和公钥的关系，其中key为公钥的hash值，value为公钥
             else if (strType == "key")
             {
                 vector<unsigned char> vchPubKey;
@@ -562,6 +579,8 @@ bool CWalletDB::LoadWallet(vector<unsigned char>& vchDefaultKeyRet)
                 mapKeys[vchPubKey] = vchPrivKey;
                 mapPubKeys[Hash160(vchPubKey)] = vchPubKey;
             }
+            //默认key对应对应的值
+           
             else if (strType == "defaultkey")
             {
                 ssValue >> vchDefaultKeyRet;
@@ -570,8 +589,11 @@ bool CWalletDB::LoadWallet(vector<unsigned char>& vchDefaultKeyRet)
             {
                 string strKey;
                 ssKey >> strKey;
+                //是否挖矿标记int fGenerateBitcoins
                 if (strKey == "fGenerateBitcoins")  ssValue >> fGenerateBitcoins;
+                //交易手续费int64 nTransactionFee
                 if (strKey == "nTransactionFee")    ssValue >> nTransactionFee;
+                //获得当前对应的外部地址，用于接收外部的连接CAddress addrIncoming
                 if (strKey == "addrIncoming")       ssValue >> addrIncoming;
             }
         }
@@ -584,12 +606,16 @@ bool CWalletDB::LoadWallet(vector<unsigned char>& vchDefaultKeyRet)
     return true;
 }
 
+//3 加载钱包LoadWallet
 bool LoadWallet()
 {
     vector<unsigned char> vchDefaultKey;
     if (!CWalletDB("cr").LoadWallet(vchDefaultKey))
         return false;
 
+    /*
+     判断默认的vchDefaultKey是否在mapKeys中，如果在，则对应的公钥和私钥保存在keyUser结构中。否则创建一个新的keyUser, 并以名称为“Your Address”保存到向量向量mapAddressBook中；同时写入配置文件wallet.dat中。
+     */
     if (mapKeys.count(vchDefaultKey))
     {
         // Set keyUser

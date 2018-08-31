@@ -2966,7 +2966,7 @@ bool CMyApp::OnInit2()
     //
     string strErrors;
     int64 nStart, nEnd;
-
+    
     printf("Loading addresses...\n");
     QueryPerformanceCounter((LARGE_INTEGER*)&nStart);
     if (!LoadAddresses())
