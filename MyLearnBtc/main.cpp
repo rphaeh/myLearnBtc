@@ -406,21 +406,29 @@ void CWalletTx::AddSupportingTransactions(CTxDB& txdb)
 
 
 
-
+//接受交易
+/*
+ 流程：1.检查交易是否有效
+ 2.检查交易是否创建成功
+ 3.检查交易是否冲突
+ */
 //1.1.3 交易接受处理
 //判断交易能不能被接受，如果能接受将对应的交易放入全局变量中mapTransactions，mapNextTx中
 bool CTransaction::AcceptTransaction(CTxDB& txdb, bool fCheckInputs, bool* pfMissingInputs)
 {
     if (pfMissingInputs)
         *pfMissingInputs = false;
+    //1.检查交易是否有效
     // 币基交易仅仅在块中有效，币基交易不能做为一个单独的交易
     // Coinbase is only valid in a block, not as a loose transaction
     if (IsCoinBase())
         return error("AcceptTransaction() : coinbase as individual tx");
 
+    //2.检查交易是否创建成功
     if (!CheckTransaction())
         return error("AcceptTransaction() : CheckTransaction failed");
 
+    //3.检查交易是否冲突
     // 判断当前交易是否我们已经接收到过了
     // Do we already have it?
     uint256 hash = GetHash();
@@ -619,7 +627,7 @@ void ReacceptWalletTransactions()
     }
 }
 
-// 钱包交易进行转播
+// 钱包交易进行转播 发送INV消息
 void CWalletTx::RelayWalletTransaction(CTxDB& txdb)
 {
     // 对于那些交易所在block到最长链的block之间的距离小于3的需要对这些交易进行转播
@@ -826,6 +834,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, map<uint256, CTxIndex>& mapTestPoo
             // Read txindex
             CTxIndex txindex;
             bool fFound = true;
+            //如果当前矿工标识为1，从mapTestPool中获取交易索引信息，否则从交易数据库中判断前一个输出是否存在
             if (fMiner && mapTestPool.count(prevout.hash))
             {
                 // Get txindex from current proposed changes
@@ -839,6 +848,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, map<uint256, CTxIndex>& mapTestPoo
             if (!fFound && (fBlock || fMiner))
                 return fMiner ? false : error("ConnectInputs() : %s prev tx %s index entry not found", GetHash().ToString().substr(0,6).c_str(),  prevout.hash.ToString().substr(0,6).c_str());
 
+            //获取前一个交易信息
             // Read txPrev
             CTransaction txPrev;
             //条件为库中未找到，在mapTransactions中找CTransaction
@@ -861,19 +871,23 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, map<uint256, CTxIndex>& mapTestPoo
                     return error("ConnectInputs() : %s ReadFromDisk prev tx %s failed", GetHash().ToString().substr(0,6).c_str(),  prevout.hash.ToString().substr(0,6).c_str());
             }
 
+            //检验前一交易信息
             if (prevout.n >= txPrev.vout.size() || prevout.n >= txindex.vSpent.size())
                 return error("ConnectInputs() : %s prevout.n out of range %d %d %d", GetHash().ToString().substr(0,6).c_str(), prevout.n, txPrev.vout.size(), txindex.vSpent.size());
 
+            //币基交易是否被足够多区块确认
             // If prev is coinbase, check that it's matured
             if (txPrev.IsCoinBase())
                 for (CBlockIndex* pindex = pindexBest; pindex && nBestHeight - pindex->nHeight < COINBASE_MATURITY-1; pindex = pindex->pprev)
                     if (pindex->nBlockPos == txindex.pos.nBlockPos && pindex->nFile == txindex.pos.nFile)
                         return error("ConnectInputs() : tried to spend coinbase at depth %d", nBestHeight - pindex->nHeight);
 
+            //校验签名信息
             // Verify signature
             if (!VerifySignature(txPrev, *this, i))
                 return error("ConnectInputs() : %s VerifySignature failed", GetHash().ToString().substr(0,6).c_str());
 
+            //确认交易未被花费
             // Check for conflicts
             if (!txindex.vSpent[prevout.n].IsNull())
                 return fMiner ? false : error("ConnectInputs() : %s prev tx already used at %s", GetHash().ToString().substr(0,6).c_str(), txindex.vSpent[prevout.n].ToString().c_str());
@@ -882,6 +896,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, map<uint256, CTxIndex>& mapTestPoo
             // Mark outpoints as spent
             txindex.vSpent[prevout.n] = posThisTx;
 
+            //更新交易信息
             // Write back
             if (fBlock)
                 txdb.UpdateTxIndex(prevout.hash, txindex);
@@ -891,6 +906,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, map<uint256, CTxIndex>& mapTestPoo
             nValueIn += txPrev.vout[prevout.n].nValue;
         }
 
+        //计算交易手续费
         // Tally transaction fees
         int64 nTxFee = nValueIn - GetValueOut();
         if (nTxFee < 0)
@@ -900,12 +916,15 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, map<uint256, CTxIndex>& mapTestPoo
         nFees += nTxFee;
     }
 
+    //当前交易是币基交易
+    //fBlock为1保存到交易数据库中
     if (fBlock)
     {
         // Add transaction to disk index
         if (!txdb.AddTxIndex(*this, posThisTx, nHeight))
             return error("ConnectInputs() : AddTxPos failed");
     }
+    //当前是矿工保存到mapTestPool
     else if (fMiner)
     {
         // 如果是矿工，将对应的交易放入对应的交易测试池中
@@ -1042,6 +1061,7 @@ bool Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 
     // 找到区块分叉点
     // Find the fork
+    //寻找当前最长链和分支链（网络中最长链）的交点
     CBlockIndex* pfork = pindexBest;
     CBlockIndex* plonger = pindexNew;
     // 找到主链和分叉链对应的交叉点
@@ -1056,6 +1076,7 @@ bool Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 
     // 列举出当前节点认为的最长链中（从当前最长链到交叉点）失去连接的块
     // List of what to disconnect
+    //清除分支链的区块信息
     vector<CBlockIndex*> vDisconnect;
     for (CBlockIndex* pindex = pindexBest; pindex != pfork; pindex = pindex->pprev)
         vDisconnect.push_back(pindex);
@@ -1088,6 +1109,7 @@ bool Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 
     // 连接最长的分支
     // Connect longer branch
+    //将当前最长链对接到网络中最长链
     vector<CTransaction> vDelete;
     for (int i = 0; i < vConnect.size(); i++)
     {
@@ -1117,6 +1139,7 @@ bool Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
             vDelete.push_back(tx);
     }
     // 写入最长链
+    //更新网络最长链
     if (!txdb.WriteHashBestChain(pindexNew->GetBlockHash()))
         return error("Reorganize() : WriteHashBestChain failed");
 
@@ -1152,14 +1175,18 @@ bool Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 /**
  1.4.3将区块新增到区块索引链中
  将当前区块增加到对应的区块索引链中mapBlockIndex
+ 
+ 区块确认通过后，将该区块加到最长的区块链中，主要有如何选取网络中最长链，如何更新区块到最长链
  */
 bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos)
 {
+    //1.区块检查，当前区块如果存在已有区块链中，返回错误
     // Check for duplicate
     uint256 hash = GetHash();
     if (mapBlockIndex.count(hash))
         return error("AddToBlockIndex() : %s already exists", hash.ToString().substr(0,14).c_str());
 
+    //2.新建区块索引
     // Construct new block index object
     CBlockIndex* pindexNew = new CBlockIndex(nFile, nBlockPos, *this);
     if (!pindexNew)
@@ -1174,12 +1201,14 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos)
         pindexNew->nHeight = pindexNew->pprev->nHeight + 1;
     }
 
+    //保存区块索引
     CTxDB txdb;
     txdb.TxnBegin();
     txdb.WriteBlockIndex(CDiskBlockIndex(pindexNew));
 
     // 更新最长链对应的指针
     // 新链的高度已经超过主链了（即是新链到创世区块的长度 大于 本节点认为的最长链到创世区块的长度
+    //当前区块链高度大于网络中最长区块高度
     // New best
     if (pindexNew->nHeight > nBestHeight)
     {
@@ -1189,9 +1218,10 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos)
             pindexGenesisBlock = pindexNew;
             txdb.WriteHashBestChain(hash);
         }
+        // 如果当前块对应的前一个块是最长的链，直接添加当前区块
         else if (hashPrevBlock == hashBestChain)
         {
-            // 如果当前块对应的前一个块是最长的链
+            
             // Adding to current best branch
             if (!ConnectBlock(txdb, pindexNew) || !txdb.WriteHashBestChain(hash))
             {
@@ -1214,6 +1244,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos)
         {
             // 当前区块既不是创世区块，且当前区块对应的前一个区块也不在最长主链上的情况
             // 再加上新区块所在链的长度大于本节点认为主链的长度，所有将进行分叉处理
+            //前一区块不是最长区块链则进行共识处理
             // New best branch
             if (!Reorganize(txdb, pindexNew))
             {
@@ -1222,6 +1253,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos)
             }
         }
 
+        //更新对应的全局变量
         // New best link
         hashBestChain = hash;
         pindexBest = pindexNew;
@@ -1230,6 +1262,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos)
         printf("AddToBlockIndex: new best=%s  height=%d\n", hashBestChain.ToString().substr(0,14).c_str(), nBestHeight);
     }
 
+    //向P2P网络广播
     txdb.TxnCommit();
     txdb.Close();
 
@@ -1245,6 +1278,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos)
 
 
 // 区块校验
+//区块基本检查：检查大小、时间轴；检查交易、pow和merkleroot
 bool CBlock::CheckBlock() const
 {
     // These are checks that are independent of context
@@ -1292,42 +1326,43 @@ bool CBlock::CheckBlock() const
 /**
  1.4.4区块接受处理
 
-// 判断当前区块能够被接收
+接受区块包含区块重复性检查，前一区块有效性检查，时间戳检查，工作量证明；
+ 当这些条件检查通过后，将区块写入磁盘并加入到区块链中
  */
 bool CBlock::AcceptBlock()
 {
     // Check for duplicate
     uint256 hash = GetHash();
-    if (mapBlockIndex.count(hash))
+    if (mapBlockIndex.count(hash))//当前区块重复性检查
         return error("AcceptBlock() : block already in mapBlockIndex");
 
     // Get prev block index
     map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.find(hashPrevBlock);
-    if (mi == mapBlockIndex.end())
+    if (mi == mapBlockIndex.end())//前一区块有效性检查
         return error("AcceptBlock() : prev block not found");
     CBlockIndex* pindexPrev = (*mi).second;
 
     // 当前块创建的时间要大于前一个块对应的中位数时间
     // Check timestamp against prev
-    if (nTime <= pindexPrev->GetMedianTimePast())
+    if (nTime <= pindexPrev->GetMedianTimePast())//时间戳检查
         return error("AcceptBlock() : block's timestamp is too early");
 
     //工作量证明校验：每一个节点自己计算对应的工作量难度
     // Check proof of work
-    if (nBits != GetNextWorkRequired(pindexPrev))
+    if (nBits != GetNextWorkRequired(pindexPrev))//工作量检查
         return error("AcceptBlock() : incorrect proof of work");
 
     // Write block to history file
     unsigned int nFile;
     unsigned int nBlockPos;
     // 将块信息写入文件中
-    if (!WriteToDisk(!fClient, nFile, nBlockPos))
+    if (!WriteToDisk(!fClient, nFile, nBlockPos))//区块写入磁盘
         return error("AcceptBlock() : WriteToDisk failed");
     // 增加块对应的快索引信息
-    if (!AddToBlockIndex(nFile, nBlockPos))
+    if (!AddToBlockIndex(nFile, nBlockPos))//加入到区块链中
         return error("AcceptBlock() : AddToBlockIndex failed");
 
-    if (hashBestChain == hash)
+    if (hashBestChain == hash)//如果该区块链是最长链，则广播消息
         RelayInventory(CInv(MSG_BLOCK, hash));
 
     // // Add atoms to user reviews for coins created
@@ -1342,15 +1377,19 @@ bool CBlock::AcceptBlock()
     return true;
 }
 // 处理区块，不管是接收到的还是自己挖矿得到的
+// 区块确认
 bool ProcessBlock(CNode* pfrom, CBlock* pblock)
 {
     // Check for duplicate
+    //区块重复性检查，区块在区块链中返回失败
     uint256 hash = pblock->GetHash();
     if (mapBlockIndex.count(hash))
         return error("ProcessBlock() : already have block %d %s", mapBlockIndex[hash]->nHeight, hash.ToString().substr(0,14).c_str());
+    //区块在孤立区块中，返回失败
     if (mapOrphanBlocks.count(hash))
         return error("ProcessBlock() : already have block (orphan) %s", hash.ToString().substr(0,14).c_str());
 
+    //区块基本检查：检查大小、时间轴；检查交易、pow和merkleroot
     // Preliminary checks
     if (!pblock->CheckBlock())
     {
@@ -1358,6 +1397,9 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
         return error("ProcessBlock() : CheckBlock FAILED");
     }
 
+    //根据区块前一区块进行处理
+    //如果前一区块不存在区块链中，则将前一区块加入孤立区块
+    //此情况表示区块链出现分叉或者网络延迟导致的，则需要发送getblocks获取最长链中缺少的区块信息
     // If don't already have its previous block, shunt it off to holding area until we get it
     if (!mapBlockIndex.count(pblock->hashPrevBlock))
     {
@@ -1371,6 +1413,7 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
         return true;
     }
 
+    //接受区块
     // Store to disk
     if (!pblock->AcceptBlock())
     {
@@ -1379,18 +1422,23 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
     }
     delete pblock;
 
+    //处理孤立区块和当前区块的关系，并尝试接受孤立区块
     // Recursively process any orphan blocks that depended on this one
     vector<uint256> vWorkQueue;
     vWorkQueue.push_back(hash);
     for (int i = 0; i < vWorkQueue.size(); i++)
     {
         uint256 hashPrev = vWorkQueue[i];
+        /*
+         map::lower_bound(key):返回map中第一个大于或等于key的迭代器指针
+         map::upper_bound(key):返回map中第一个大于key的迭代器指针
+         */
         for (multimap<uint256, CBlock*>::iterator mi = mapOrphanBlocksByPrev.lower_bound(hashPrev);
              mi != mapOrphanBlocksByPrev.upper_bound(hashPrev);
              ++mi)
         {
             CBlock* pblockOrphan = (*mi).second;
-            if (pblockOrphan->AcceptBlock())
+            if (pblockOrphan->AcceptBlock())//尝试接受孤立区块
                 vWorkQueue.push_back(pblockOrphan->GetHash());
             mapOrphanBlocks.erase(pblockOrphan->GetHash());
             delete pblockOrphan;
@@ -2592,95 +2640,110 @@ int64 GetBalance()
 
 
 
+/**
+选择未花费交易
+ 1.初步选择合适交易->遍历钱包中所有交易->交易有效性检查
+ 2.选择最终交易->所有小交易列表的值小于目标值？存在最大值：使用随机逼近算法选择最后的最小交易组合
+ */
 bool SelectCoins(int64 nTargetValue, set<CWalletTx*>& setCoinsRet)
 {
+    //初步选择合适交易
     setCoinsRet.clear();
 
     // List of values less than target
-    int64 nLowestLarger = _I64_MAX;
-    CWalletTx* pcoinLowestLarger = NULL;
-    vector<pair<int64, CWalletTx*> > vValue;
-    int64 nTotalLower = 0;
+    int64 nLowestLarger = _I64_MAX;//保存最大的金额值
+    CWalletTx* pcoinLowestLarger = NULL;//保存金额大于nTargetValue所有值中的最小值
+    vector<pair<int64, CWalletTx*> > vValue;//保存满足要求的交易记录，允许key重复（即候选对象）
+    int64 nTotalLower = 0;//存放小于nTargetValue的所有值之和
 
     CRITICAL_BLOCK(cs_mapWallet)
     {
+        //遍历钱包中所有交易
         for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
-            CWalletTx* pcoin = &(*it).second;
-            if (!pcoin->IsFinal() || pcoin->fSpent)
+            CWalletTx* pcoin = &(*it).second;//选取钱包的交易
+            //交易有效性检查
+            if (!pcoin->IsFinal() || pcoin->fSpent)//判断交易是否结束或者被花费
                 continue;
-            int64 n = pcoin->GetCredit();
+            int64 n = pcoin->GetCredit();//获取记录可用金额
             if (n <= 0)
                 continue;
-            if (n < nTargetValue)
+            //交易归类
+            if (n < nTargetValue)//1。交易金额小于目标值，保存交易到小交易列表vValue
             {
                 vValue.push_back(make_pair(n, pcoin));
                 nTotalLower += n;
             }
-            else if (n == nTargetValue)
+            else if (n == nTargetValue)//2.交易金额等于目标值，直接返回该交易
             {
-                setCoinsRet.insert(pcoin);
+                setCoinsRet.insert(pcoin);//保存并直接返回
                 return true;
             }
-            else if (n < nLowestLarger)
+            else if (n < nLowestLarger)//3.交易金额大于目标值且小于已有最大交易值，保存交易到最大交易信息pcoinLowestLarger
             {
-                nLowestLarger = n;
-                pcoinLowestLarger = pcoin;
+                nLowestLarger = n;//替换金额
+                pcoinLowestLarger = pcoin;//替换记录对象
             }
         }
     }
 
-    if (nTotalLower < nTargetValue)
+    //选择最终交易
+    //1.所有小交易列表的值小于目标值，没有最大交易值，余额不足
+    if (nTotalLower < nTargetValue)//所有小交易列表值的和小于目标值
     {
-        if (pcoinLowestLarger == NULL)
-            return false;
-        setCoinsRet.insert(pcoinLowestLarger);
+        if (pcoinLowestLarger == NULL)//没有找到大于目标值得对象
+            return false;//此时，所有交易均小于目标值，且和页小于目标值，余额不足
+        setCoinsRet.insert(pcoinLowestLarger);//将大于目标值得对象返回
         return true;
     }
 
+    //2.所有小交易列表值的和大于目标值，采用随机逼近算法查找最合适的交易组合
     // Solve subset sum by stochastic approximation
-    sort(vValue.rbegin(), vValue.rend());
-    vector<char> vfIncluded;
-    vector<char> vfBest(vValue.size(), true);
-    int64 nBest = nTotalLower;
+    sort(vValue.rbegin(), vValue.rend());//对小于目标值的所有key排序
+    vector<char> vfIncluded;//排除标志符
+    vector<char> vfBest(vValue.size(), true);//最优记录标志符
+    int64 nBest = nTotalLower;//最优值，该值将动态调整
 
+    //操作1000次，如果最优值等于目标值或者1000次结算，则退出循环
     for (int nRep = 0; nRep < 1000 && nBest != nTargetValue; nRep++)
     {
-        vfIncluded.assign(vValue.size(), false);
+        vfIncluded.assign(vValue.size(), false);//排除标志符设为false
         int64 nTotal = 0;
         bool fReachedTarget = false;
+        //进行两次操作，当两次操作完成或者找到合适对象时退出循环
         for (int nPass = 0; nPass < 2 && !fReachedTarget; nPass++)
         {
-            for (int i = 0; i < vValue.size(); i++)
+            for (int i = 0; i < vValue.size(); i++)//遍历所有小于目标值的对象
             {
-                if (nPass == 0 ? rand() % 2 : !vfIncluded[i])
+                if (nPass == 0 ? rand() % 2 : !vfIncluded[i])//第一次操作采取随机抽取，第二次操作针对第一次没有随机抽取的对象
                 {
-                    nTotal += vValue[i].first;
-                    vfIncluded[i] = true;
-                    if (nTotal >= nTargetValue)
+                    nTotal += vValue[i].first;//累加值
+                    vfIncluded[i] = true;//标示为已使用
+                    if (nTotal >= nTargetValue)//如果总数大于目标值
                     {
-                        fReachedTarget = true;
-                        if (nTotal < nBest)
+                        fReachedTarget = true;//发现目标
+                        if (nTotal < nBest)//该目标比以往发现的目标好
                         {
-                            nBest = nTotal;
-                            vfBest = vfIncluded;
+                            nBest = nTotal;//替换为最好目标
+                            vfBest = vfIncluded;//保存相应的对象
                         }
-                        nTotal -= vValue[i].first;
-                        vfIncluded[i] = false;
+                        nTotal -= vValue[i].first;//放弃该对象，寻找下一个
+                        vfIncluded[i] = false;//该对象值为false，便于第二次随机抽取使用
                     }
                 }
             }
         }
     }
 
+    //最大值对象比累加对象好
     // If the next larger is still closer, return it
     if (pcoinLowestLarger && nLowestLarger - nTargetValue <= nBest - nTargetValue)
-        setCoinsRet.insert(pcoinLowestLarger);
+        setCoinsRet.insert(pcoinLowestLarger);//返回最大对象
     else
     {
-        for (int i = 0; i < vValue.size(); i++)
+        for (int i = 0; i < vValue.size(); i++)//循环选对象
             if (vfBest[i])
-                setCoinsRet.insert(vValue[i].second);
+                setCoinsRet.insert(vValue[i].second);//取出合适对象
 
         //// debug print
         printf("SelectCoins() best subset: ");
@@ -2773,6 +2836,7 @@ bool CreateTransaction(CScript scriptPubKey, int64 nValue, CWalletTx& wtxNew, in
                     continue;
                 }
 
+                //计算merkle值
                 // Fill vtxPrev by copying from previous transactions vtxPrev
                 wtxNew.AddSupportingTransactions(txdb);
                 wtxNew.fTimeReceivedIsTxTime = true;
@@ -2829,6 +2893,7 @@ bool SendMoney(CScript scriptPubKey, int64 nValue, CWalletTx& wtxNew)
     CRITICAL_BLOCK(cs_main)
     {
         int64 nFeeRequired;
+        //新建交易
         if (!CreateTransaction(scriptPubKey, nValue, wtxNew, nFeeRequired))
         {
             string strError;
@@ -2839,6 +2904,7 @@ bool SendMoney(CScript scriptPubKey, int64 nValue, CWalletTx& wtxNew)
             wxMessageBox(strError, "Sending...");
             return error("SendMoney() : %s\n", strError.c_str());
         }
+        //提交交易
         if (!CommitTransactionSpent(wtxNew))
         {
             wxMessageBox("Error finalizing transaction", "Sending...");
@@ -2847,6 +2913,7 @@ bool SendMoney(CScript scriptPubKey, int64 nValue, CWalletTx& wtxNew)
 
         printf("SendMoney: %s\n", wtxNew.GetHash().ToString().substr(0,6).c_str());
 
+        //接受交易
         // Broadcast
         if (!wtxNew.AcceptTransaction())
         {
@@ -2855,6 +2922,7 @@ bool SendMoney(CScript scriptPubKey, int64 nValue, CWalletTx& wtxNew)
             wxMessageBox("Error: Transaction not valid", "Sending...");
             return error("SendMoney() : Error: Transaction not valid");
         }
+        //广播钱包中的交易
         wtxNew.RelayWalletTransaction();
     }
     MainFrameRepaint();
