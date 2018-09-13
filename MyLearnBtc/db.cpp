@@ -417,6 +417,9 @@ bool CAddrDB::LoadAddresses()
 {
     CRITICAL_BLOCK(cs_mapAddresses)
     {
+        /*
+         判断有没有用户自定义的地址信息（信息位于addr.txt中）。如果有自定义地址信息，则获取对应地址信息，如果该地址不在mapAddresses中，则保存到mapAddresses并且写入addr.dat配置文件中；否则将nServices信息写入addr.dat配置文件中。
+         */
         // Load user provided addresses
         CAutoFile filein = fopen("addr.txt", "rt");
         if (filein)
